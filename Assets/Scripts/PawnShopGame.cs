@@ -143,6 +143,7 @@ namespace PawnShop
         float brazoAnguloActual;
         float angleBaulPivot, angleTolvaPivot;
         RectTransform baulRect, tolvaRect, brazoHombro, brazoCuerpo;
+        RectTransform brazoBaseRect, brazoProngL, brazoProngR;
         Text  baulTexto;
         GameObject brazoPiezaGO;
 
@@ -210,7 +211,8 @@ namespace PawnShop
             // Si el juego se cargó con la cadena ya comprada, activar componentes y brazo
             if (TolvaComprada && tolvaRect != null)  tolvaRect.gameObject.SetActive(true);
             if (BaulComprado  && baulRect  != null)  baulRect.gameObject.SetActive(true);
-            if (BrazoComprado && brazoHombro != null) brazoHombro.gameObject.SetActive(true);
+            if (BrazoComprado && brazoHombro   != null) brazoHombro.gameObject.SetActive(true);
+            if (BrazoComprado && brazoBaseRect != null) brazoBaseRect.gameObject.SetActive(true);
             if (BrazoComprado && !brazoCoroutineActiva) StartCoroutine(CicloBrazo());
         }
 
@@ -899,6 +901,7 @@ namespace PawnShop
                     if (brazoHombro != null)
                     {
                         StartCoroutine(AnimarCaida(brazoHombro, new Vector2(BrazoPivotX, BrazoPivotY)));
+                        if (brazoBaseRect != null) brazoBaseRect.gameObject.SetActive(true);
                         if (!brazoCoroutineActiva) StartCoroutine(CicloBrazo());
                     }
                     break;
@@ -1808,45 +1811,105 @@ namespace PawnShop
 
         void ConstruirBrazoAutomatico(Transform canvasT)
         {
-            // Hombro: pivot de rotación
-            var hombro = new GameObject("BrazoHombro", typeof(Image));
+            // Calcular ángulos primero (se usan en la rotación inicial)
+            Vector2 pivotPos = new Vector2(BrazoPivotX, BrazoPivotY);
+            angleBaulPivot  = AnguloHacia(new Vector2(BaulX,  BaulY)  - pivotPos);
+            angleTolvaPivot = AnguloHacia(new Vector2(TolvaX, TolvaY) - pivotPos);
+            brazoAnguloActual = angleBaulPivot;
+
+            // ── BASE ESTÁTICA (plataforma fija, estilo Factorio) ──
+            var baseGO = new GameObject("BrazoBase", typeof(Image));
+            baseGO.transform.SetParent(canvasT, false);
+            brazoBaseRect = baseGO.GetComponent<RectTransform>();
+            brazoBaseRect.anchorMin = brazoBaseRect.anchorMax = brazoBaseRect.pivot = new Vector2(0.5f, 0.5f);
+            brazoBaseRect.sizeDelta = new Vector2(34, 34);
+            brazoBaseRect.anchoredPosition = pivotPos;
+            baseGO.GetComponent<Image>().color = new Color(0.22f, 0.24f, 0.28f, 1f);
+            baseGO.GetComponent<Image>().raycastTarget = false;
+
+            var baseInner = new GameObject("BaseInner", typeof(Image));
+            baseInner.transform.SetParent(baseGO.transform, false);
+            var bir = baseInner.GetComponent<RectTransform>();
+            bir.anchorMin = bir.anchorMax = bir.pivot = new Vector2(0.5f, 0.5f);
+            bir.sizeDelta = new Vector2(18, 18);
+            bir.anchoredPosition = Vector2.zero;
+            baseInner.GetComponent<Image>().color = new Color(0.38f, 0.40f, 0.46f, 1f);
+            baseInner.GetComponent<Image>().raycastTarget = false;
+            baseGO.SetActive(false);
+
+            // ── PIVOTE ROTANTE (solo transform, sin visual propio) ──
+            var hombro = new GameObject("BrazoHombro", typeof(RectTransform));
             hombro.transform.SetParent(canvasT, false);
             brazoHombro = hombro.GetComponent<RectTransform>();
             brazoHombro.anchorMin = brazoHombro.anchorMax = brazoHombro.pivot = new Vector2(0.5f, 0.5f);
-            brazoHombro.sizeDelta = new Vector2(24, 24);
-            brazoHombro.anchoredPosition = new Vector2(BrazoPivotX, BrazoPivotY);
-            hombro.GetComponent<Image>().color = new Color(0.55f, 0.58f, 0.65f, 1f);
-            hombro.GetComponent<Image>().raycastTarget = false;
+            brazoHombro.sizeDelta = Vector2.zero;
+            brazoHombro.anchoredPosition = pivotPos;
+            brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
 
-            // Cuerpo del brazo: hijo del hombro, rota con él
+            // ── CUERPO DEL BRAZO (amarillo Factorio) ──
             var cuerpo = new GameObject("BrazoCuerpo", typeof(Image));
             cuerpo.transform.SetParent(hombro.transform, false);
             brazoCuerpo = cuerpo.GetComponent<RectTransform>();
             brazoCuerpo.anchorMin = brazoCuerpo.anchorMax = new Vector2(0.5f, 0f);
             brazoCuerpo.pivot = new Vector2(0.5f, 0f);
-            brazoCuerpo.sizeDelta = new Vector2(14, BrazoLargo);
+            brazoCuerpo.sizeDelta = new Vector2(10, BrazoLargo);
             brazoCuerpo.anchoredPosition = Vector2.zero;
-            cuerpo.GetComponent<Image>().color = new Color(0.45f, 0.48f, 0.55f, 1f);
+            cuerpo.GetComponent<Image>().color = new Color(0.82f, 0.52f, 0.10f, 1f);
             cuerpo.GetComponent<Image>().raycastTarget = false;
 
-            // Pieza en la punta del brazo (visible solo cuando lleva item)
+            // Marcador de articulación en el centro del brazo
+            var juntaGO = new GameObject("Junta", typeof(Image));
+            juntaGO.transform.SetParent(cuerpo.transform, false);
+            var jr = juntaGO.GetComponent<RectTransform>();
+            jr.anchorMin = jr.anchorMax = jr.pivot = new Vector2(0.5f, 0.5f);
+            jr.sizeDelta = new Vector2(16, 16);
+            jr.anchoredPosition = Vector2.zero;
+            juntaGO.GetComponent<Image>().color = new Color(0.22f, 0.24f, 0.28f, 1f);
+            juntaGO.GetComponent<Image>().raycastTarget = false;
+
+            // ── GARRA EN LA PUNTA (estilo inserter Factorio) ──
+            var garraGO = new GameObject("Garra", typeof(RectTransform));
+            garraGO.transform.SetParent(cuerpo.transform, false);
+            var garraRt = garraGO.GetComponent<RectTransform>();
+            garraRt.anchorMin = garraRt.anchorMax = new Vector2(0.5f, 1f);
+            garraRt.pivot = new Vector2(0.5f, 0f);
+            garraRt.sizeDelta = Vector2.zero;
+            garraRt.anchoredPosition = Vector2.zero;
+
+            // Prong izquierdo: pivot en esquina inferior-derecha
+            var prongLGO = new GameObject("ProngL", typeof(Image));
+            prongLGO.transform.SetParent(garraGO.transform, false);
+            brazoProngL = prongLGO.GetComponent<RectTransform>();
+            brazoProngL.anchorMin = brazoProngL.anchorMax = new Vector2(0.5f, 0f);
+            brazoProngL.pivot = new Vector2(1f, 0f);
+            brazoProngL.sizeDelta = new Vector2(7, 20);
+            brazoProngL.anchoredPosition = new Vector2(-1f, 0f);
+            prongLGO.GetComponent<Image>().color = new Color(0.94f, 0.64f, 0.14f, 1f);
+            prongLGO.GetComponent<Image>().raycastTarget = false;
+            brazoProngL.localRotation = Quaternion.Euler(0f, 0f, 28f);   // abierta por defecto
+
+            // Prong derecho: pivot en esquina inferior-izquierda
+            var prongRGO = new GameObject("ProngR", typeof(Image));
+            prongRGO.transform.SetParent(garraGO.transform, false);
+            brazoProngR = prongRGO.GetComponent<RectTransform>();
+            brazoProngR.anchorMin = brazoProngR.anchorMax = new Vector2(0.5f, 0f);
+            brazoProngR.pivot = new Vector2(0f, 0f);
+            brazoProngR.sizeDelta = new Vector2(7, 20);
+            brazoProngR.anchoredPosition = new Vector2(1f, 0f);
+            prongRGO.GetComponent<Image>().color = new Color(0.94f, 0.64f, 0.14f, 1f);
+            prongRGO.GetComponent<Image>().raycastTarget = false;
+            brazoProngR.localRotation = Quaternion.Euler(0f, 0f, -28f);  // abierta por defecto
+
+            // Item entre los prongs (visible mientras transporta)
             brazoPiezaGO = new GameObject("BrazoPieza", typeof(Image));
-            brazoPiezaGO.transform.SetParent(cuerpo.transform, false);
+            brazoPiezaGO.transform.SetParent(garraGO.transform, false);
             var pr = brazoPiezaGO.GetComponent<RectTransform>();
-            pr.anchorMin = pr.anchorMax = new Vector2(0.5f, 1f);
-            pr.pivot = new Vector2(0.5f, 0.5f);
-            pr.sizeDelta = new Vector2(20, 20);
-            pr.anchoredPosition = Vector2.zero;
-            brazoPiezaGO.GetComponent<Image>().color = new Color(1f, 0.88f, 0.35f, 1f);
+            pr.anchorMin = pr.anchorMax = pr.pivot = new Vector2(0.5f, 0.5f);
+            pr.sizeDelta = new Vector2(12, 12);
+            pr.anchoredPosition = new Vector2(0f, 10f);
+            brazoPiezaGO.GetComponent<Image>().color = new Color(1f, 0.90f, 0.35f, 1f);
             brazoPiezaGO.GetComponent<Image>().raycastTarget = false;
             brazoPiezaGO.SetActive(false);
-
-            // Calcular ángulos hacia baúl y tolva desde el pivot
-            Vector2 pivot = new Vector2(BrazoPivotX, BrazoPivotY);
-            angleBaulPivot  = AnguloHacia(new Vector2(BaulX,  BaulY)  - pivot);
-            angleTolvaPivot = AnguloHacia(new Vector2(TolvaX, TolvaY) - pivot);
-            brazoAnguloActual = angleBaulPivot;
-            brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
 
             hombro.SetActive(false);
         }
@@ -1916,26 +1979,31 @@ namespace PawnShop
         IEnumerator CicloBrazo()
         {
             brazoCoroutineActiva = true;
+            // Asegurar garra abierta al arrancar
+            if (brazoProngL != null) brazoProngL.localRotation = Quaternion.Euler(0f, 0f,  28f);
+            if (brazoProngR != null) brazoProngR.localRotation = Quaternion.Euler(0f, 0f, -28f);
+
             while (true)
             {
                 // Esperar hasta que la cadena esté completa y haya items + hueco
                 while (!CadenaCompleta || baulItems <= 0 || SlotLibreIndex() < 0)
                     yield return new WaitForSeconds(0.4f);
 
-                // 1. Girar hacia el baúl
+                // 1. Girar hacia el baúl (garra abierta)
                 yield return StartCoroutine(RotarBrazo(angleBaulPivot));
 
-                // 2. Coger item del baúl
+                // 2. Cerrar garra: coger item
+                yield return StartCoroutine(AnimarGarra(true));
                 baulItems = Mathf.Max(0, baulItems - 1);
                 ItemDef item = ItemAleatorio(it => it.limpiable && !it.soloLote);
                 if (brazoPiezaGO != null) brazoPiezaGO.SetActive(true);
                 Sonido(sfxCompra, 0.65f);
-                yield return new WaitForSeconds(0.18f);
+                yield return new WaitForSeconds(0.1f);
 
-                // 3. Girar hacia la tolva
+                // 3. Girar hacia la tolva (garra cerrada, transportando item)
                 yield return StartCoroutine(RotarBrazo(angleTolvaPivot));
 
-                // 4. Depositar en ranura libre
+                // 4. Abrir garra: soltar en ranura
                 int slot = SlotLibreIndex();
                 if (slot >= 0)
                 {
@@ -1945,12 +2013,34 @@ namespace PawnShop
                     Sonido(sfxCompra, 0.9f);
                     Flotante(tolvaRect, "▼", new Color(0.7f, 0.9f, 0.6f), 22, new Vector2(0f, 20f));
                 }
+                yield return StartCoroutine(AnimarGarra(false));
                 if (brazoPiezaGO != null) brazoPiezaGO.SetActive(false);
-                yield return new WaitForSeconds(0.22f);
+                yield return new WaitForSeconds(0.15f);
 
                 // 5. Cooldown antes del siguiente ciclo
                 yield return new WaitForSeconds(BrazoCooldown);
             }
+        }
+
+        IEnumerator AnimarGarra(bool cerrar)
+        {
+            if (brazoProngL == null || brazoProngR == null) yield break;
+            // Cerrar: prongs a 0° (paralelos). Abrir: prongs a ±28°.
+            float targetL = cerrar ? 0f :  28f;
+            float targetR = cerrar ? 0f : -28f;
+            float dur = 0.13f, t = 0f;
+            float startL = brazoProngL.localEulerAngles.z; if (startL > 180f) startL -= 360f;
+            float startR = brazoProngR.localEulerAngles.z; if (startR > 180f) startR -= 360f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / dur);
+                brazoProngL.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(startL, targetL, k));
+                brazoProngR.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(startR, targetR, k));
+                yield return null;
+            }
+            brazoProngL.localRotation = Quaternion.Euler(0f, 0f, targetL);
+            brazoProngR.localRotation = Quaternion.Euler(0f, 0f, targetR);
         }
 
         IEnumerator RotarBrazo(float targetAngle)
