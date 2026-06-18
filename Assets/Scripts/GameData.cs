@@ -27,7 +27,7 @@ namespace PawnShop
         // --- Sistema de Geodos ---
         public int nivelOjo = 0;              // "Ojo de tasador": mejora probabilidades al abrir geodos.
         public int nivelTriturador = 0;       // Automatización: compra y parte geodos solo.
-        public int nivelCinta = 0;            // Automatización: alimenta al triturador.
+        public int nivelCintaGeodo = 0;       // Automatización: alimenta al triturador (distinto de nivelCinta de la máquina).
         public int nivelClasificador = 0;     // Automatización: separa gemas y las manda al baúl.
         public int nivelOjoElectronico = 0;   // Automatización: aplica nivelOjo al procesado automático.
     }

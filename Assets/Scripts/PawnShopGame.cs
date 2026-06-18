@@ -893,7 +893,7 @@ namespace PawnShop
             AddNodo("min_ojo", "Ojo de tasador", Rama.Minerales, null, false, 40, 1.7, 22,
                 () => data.nivelOjo, () => data.nivelOjo++);
             AddBloqueado("min_triturador",  "Triturador",            Rama.Minerales, "min_ojo");
-            AddBloqueado("min_cinta",       "Cinta de alimentacion", Rama.Minerales, "min_triturador");
+            AddBloqueado("min_cinta",       "Cinta de alimentacion", Rama.Minerales, "min_triturador");  // usa data.nivelCintaGeodo
             AddBloqueado("min_clasificador","Clasificador de gemas", Rama.Minerales, "min_cinta");
             AddBloqueado("min_ojo_elec",    "Ojo electronico",       Rama.Minerales, "min_clasificador");
 
