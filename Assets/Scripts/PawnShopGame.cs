@@ -97,11 +97,15 @@ namespace PawnShop
         bool   BaulComprado      => data.nivelBaul  >= 1;
         bool   BrazoComprado     => data.nivelBrazo >= 1;
         bool   TolvaComprada     => data.nivelTolva >= 1;
-        bool   BaulBrazoEnRango  => BaulComprado && BrazoComprado && baulRect != null && brazoHombro != null
-                                    && Vector2.Distance(baulRect.anchoredPosition, brazoHombro.anchoredPosition) < RangoConexion;
-        bool   BrazoTolvaEnRango => BrazoComprado && TolvaComprada && tolvaRect != null && brazoHombro != null
-                                    && Vector2.Distance(tolvaRect.anchoredPosition, brazoHombro.anchoredPosition) < RangoConexion;
-        bool   CadenaCompleta    => BaulComprado && BrazoComprado && TolvaComprada && BaulBrazoEnRango && BrazoTolvaEnRango;
+        bool   BaulBrazoEnRango      => BaulComprado && BrazoComprado && baulRect != null && brazoHombro != null
+                                        && Vector2.Distance(baulRect.anchoredPosition, brazoHombro.anchoredPosition) < RangoConexion;
+        bool   BrazoTolvaEnRango     => BrazoComprado && TolvaComprada && tolvaRect != null && brazoHombro != null
+                                        && Vector2.Distance(tolvaRect.anchoredPosition, brazoHombro.anchoredPosition) < RangoConexion;
+        bool   TolvaMaquinaEnRango   => TolvaComprada && MaquinaComprada && tolvaRect != null && machineRect != null
+                                        && Vector2.Distance(tolvaRect.anchoredPosition  + new Vector2(0f, -50f),
+                                                            machineRect.anchoredPosition + new Vector2(0f, 140f)) < RangoConexion;
+        bool   CadenaCompleta        => BaulComprado && BrazoComprado && TolvaComprada
+                                        && BaulBrazoEnRango && BrazoTolvaEnRango && TolvaMaquinaEnRango;
         int    BaulCapacidad     => 2 + data.nivelBaul * 2;           // 1→4, 2→6, 3→8, 4→10
         float  BrazoCooldown     => Mathf.Max(2f, 12f - (data.nivelBrazo - 1) * 2f);
         float  BrazoVelGiro      => 160f + data.nivelBrazo * 30f;
@@ -154,7 +158,7 @@ namespace PawnShop
         RectTransform compEnArrastre;
         Vector2 offsetArrastre;
         // Puntos de conexión visuales
-        PuntoConexion pcBaulOut, pcBrazoIn, pcBrazoOut, pcTolvaIn;
+        PuntoConexion pcBaulOut, pcBrazoIn, pcBrazoOut, pcTolvaIn, pcTolvaOut, pcMaqIn;
 
         // ----------------- Clientes -----------------
         ClienteDef[] clientes;
@@ -1427,6 +1431,9 @@ namespace PawnShop
             lrt.anchoredPosition = new Vector2(0f, -6f);
             lrt.sizeDelta = new Vector2(60f, 40f);
 
+            // Punto de conexión superior (recibe la tolva)
+            pcMaqIn = CrearIndicador(maqGO.transform, machineRect, new Vector2(0f, 142f));
+
             machineRect.gameObject.SetActive(MaquinaComprada);   // oculta hasta comprarla
         }
 
@@ -1838,7 +1845,8 @@ namespace PawnShop
             go.GetComponent<RawImage>().texture = PixelArtFactory.CrearTolva();
             go.GetComponent<RawImage>().raycastTarget = true;
             HacerArrastrable(tolvaRect);
-            pcTolvaIn = CrearIndicador(go.transform, tolvaRect, new Vector2(55f, 5f));
+            pcTolvaIn  = CrearIndicador(go.transform, tolvaRect, new Vector2( 55f,   5f));
+            pcTolvaOut = CrearIndicador(go.transform, tolvaRect, new Vector2(  0f, -52f));
 
             // Label: ranuras que aporta la tolva
             tolvaLabel = CrearTexto(go.transform, "", 17, fuente, new Color(0.75f, 0.88f, 0.65f));
@@ -2270,13 +2278,15 @@ namespace PawnShop
 
         void ActualizarIndicadoresConexion()
         {
-            if (!BrazoComprado) return;
             bool bb = BaulBrazoEnRango;
             bool bt = BrazoTolvaEnRango;
+            bool tm = TolvaMaquinaEnRango;
             pcBaulOut?.Refrescar(bb);
             pcBrazoIn?.Refrescar(bb);
             pcBrazoOut?.Refrescar(bt);
             pcTolvaIn?.Refrescar(bt);
+            pcTolvaOut?.Refrescar(tm);
+            pcMaqIn?.Refrescar(tm);
         }
 
         void ActualizarConectorTolva()
