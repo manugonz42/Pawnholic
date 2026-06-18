@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 717009d0005a5ce46b6b16a14d41dba2, type: 3}
+  m_Name: El Tito Paco
+  m_EditorClassIdentifier: Assembly-CSharp::PawnShop.ClienteDef
+  nombreCliente: El Tito Paco
+  arquetipo: 3
+  piel: {r: 0.88, g: 0.7, b: 0.55, a: 1}
+  pelo: {r: 0.15, g: 0.12, b: 0.1, a: 1}
+  ropa: {r: 0.5, g: 0.42, b: 0.2, a: 1}
+  saludo: Mira que ganga te traigo, jefe.
+  contento: Un placer hacer negocios.
+  enfadado: Eh eh, que eso no lo pago yo.
+  propinaProb: 0.3
+  propinaMax: 0.45

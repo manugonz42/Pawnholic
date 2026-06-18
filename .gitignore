@@ -1,0 +1,47 @@
+# ---- Unity generado (se regenera solo, NO subir) ----
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Builds de Asset Store / paquetes exportados
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# ---- IDE / editores ----
+/.vs/
+/.idea/
+/.vscode/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.userprefs
+*.suo
+*.tmp
+*.pidb
+*.booproj
+*.svd
+*.opendb
+*.VC.db
+
+# ---- Plastic SCM (ya no se usa si pasas a git) ----
+/.plastic/
+
+# ---- Crash / logs varios ----
+sysinfo.txt
+crashlytics-build.properties
+
+# ---- Capturas de prueba (mías, prescindibles) ----
+/Assets/Screenshots/
+/Assets/Screenshots.meta
+
+# ---- Claude Code (configuración local del usuario) ----
+.claude/

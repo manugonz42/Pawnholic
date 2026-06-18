@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 717009d0005a5ce46b6b16a14d41dba2, type: 3}
+  m_Name: Ramon el del apuro
+  m_EditorClassIdentifier: Assembly-CSharp::PawnShop.ClienteDef
+  nombreCliente: Ramon el del apuro
+  arquetipo: 1
+  piel: {r: 0.9, g: 0.72, b: 0.58, a: 1}
+  pelo: {r: 0.25, g: 0.18, b: 0.12, a: 1}
+  ropa: {r: 0.4, g: 0.4, b: 0.42, a: 1}
+  saludo: Por favor, necesito venderlo ya...
+  contento: Gracias, me salvas la vida.
+  enfadado: No! Era lo unico que tenia!
+  propinaProb: 0.15
+  propinaMax: 0.2
