@@ -469,8 +469,10 @@ namespace PawnShop
 
         ItemDef SortearLote(LoteTier tier)
         {
+            // Ojo electrónico amplifica el ojo de tasador: cada nivel suma ×0.5 al ratio.
+            float amplificador = 1f + data.nivelOjoElectronico * 0.5f;
             float ojoRatio = tier.nivelOjoMax > 0
-                ? Mathf.Clamp01(data.nivelOjo / (float)tier.nivelOjoMax) : 0f;
+                ? Mathf.Clamp01(data.nivelOjo * amplificador / (float)tier.nivelOjoMax) : 0f;
 
             float total = 0f;
             foreach (var e in tier.tabla) total += PesoConOjo(e, ojoRatio);
@@ -960,7 +962,8 @@ namespace PawnShop
             AddBloqueado("min_cinta",       "Cinta de alimentacion", Rama.Minerales, "min_triturador");
             AddNodo("min_clasificador", "Clasificador de gemas", Rama.Minerales, "min_ojo", true, 800, 1, 1,
                 () => data.nivelClasificador, () => data.nivelClasificador++);
-            AddBloqueado("min_ojo_elec",    "Ojo electronico",       Rama.Minerales, "min_clasificador");
+            AddNodo("min_ojo_elec", "Ojo electronico", Rama.Minerales, "min_clasificador", true, 1200, 2.5, 3,
+                () => data.nivelOjoElectronico, () => data.nivelOjoElectronico++);
 
             // --- Rama COMPRA-VENTA (aún no jugable: solo estructura del árbol) ---
             AddBloqueado("cv_mercadillo", "Acceso a mercadillo", Rama.CompraVenta, null);
