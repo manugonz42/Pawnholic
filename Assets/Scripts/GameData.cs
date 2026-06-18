@@ -23,5 +23,12 @@ namespace PawnShop
         public int nivelBrazo = 0;            // Máquina: brazo que auto-alimenta la tolva (automatiza).
         public int nivelTolva = 0;            // Máquina: tamaño de tolva (auto-alimenta más rápido).
         public long ultimoCierreBinario = 0;  // Momento del último guardado (DateTime.ToBinary) para el progreso offline.
+
+        // --- Sistema de Geodos ---
+        public int nivelOjo = 0;              // "Ojo de tasador": mejora probabilidades al abrir geodos.
+        public int nivelTriturador = 0;       // Automatización: compra y parte geodos solo.
+        public int nivelCinta = 0;            // Automatización: alimenta al triturador.
+        public int nivelClasificador = 0;     // Automatización: separa gemas y las manda al baúl.
+        public int nivelOjoElectronico = 0;   // Automatización: aplica nivelOjo al procesado automático.
     }
 }

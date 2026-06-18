@@ -226,30 +226,72 @@ la **máquina es un hito de compra breve (~2-3 min a mano, coste 70 dinero)**, N
   de pulido, y sobre todo los **crecimientos** y costes de los hitos de la rama Máquina.
 - ⚠️ El tuneado fino real depende de tener Fases 2-5 y de **playtest**: estos son valores de partida.
 
-## 10e. Lotes misteriosos (gambling: premio gordo / bomba) — 2026-06-17
+## 10e. Sistema de Geodos (gambling con automatización) — rediseño 2026-06-18
 
-Capa de **varianza** sobre el trabajo estable: el servicio a clientes da los primeros euros (seguro);
-los **lotes** son la apuesta (riesgo/recompensa). Decisión: **lotes revelados al limpiar** + **bomba de
-riesgo real ocasional**.
+Inspirado en Scritchy Scratchy pero temático al empeño. El jugador compra bolsas de minerales en bruto,
+las **parte para revelar** su contenido (misma tensión que un rasca-rasca) y eventualmente automatiza
+toda la cadena.
 
-- **Compra de lote** (botones abajo-izq, por tiers): pagas dinero → se abre una **VENTANA MODAL de
-  apertura** (oscurece el fondo, panel con efecto de entrada). Dentro está el **objeto tapado** por mugre
-  genérica (no se ve qué es); el contenido se **sortea al comprar** (sellado) y se **revela frotando**
-  dentro de la ventana → el reveal lento es la tensión. Los lotes **no dan EXP** y **no se pueden mandar
-  a la máquina** (hay que revelarlos a mano).
-- **Efectos al revelar** (en la ventana): destello, **estallido de partículas** (cuadraditos que salen
-  del centro), *punch* del texto de resultado, **temblor** del panel si es bomba; y sonido. Tras revelar
-  aparece el botón **RECOGER** (cierra la ventana y vuelve el flujo de clientes).
-- **Resultados** (al terminar de limpiar): **PREMIO GORDO** (item `esJackpot`, valor alto, feedback
-  dorado + chime agudo), **BOMBA** (item `esBomba`: "Objeto robado" → pierdes `penalizacion` dinero,
-  feedback rojo + crujido), o **normal/chatarra**. Tiers actuales: *Bolsa de la calle* (12) y *Caja de
-  mercadillo* (60), con tablas de probabilidad ponderadas (en código, `CrearLotes()` — 1ª pasada, tunear).
-- **Datos**: `ItemDef` gana `soloLote` (no sale como cliente), `esJackpot`, `esBomba`, `penalizacion`.
-  Items de lote (assets en Resources/Items): Chatarra, Diamante rosa, Reloj de oro, Objeto robado.
-- **Esto ES el embrión de la Fase 2 (compraventa)**: comprar barato/arriesgado para sacar valor con el
-  trabajo. La tasación/detección de fallos (skills) encaja luego encima (reducir varianza pagando skill).
-- *(Pendiente/tunear)*: EV de los tiers, más tiers (subasta), mover las tablas a ScriptableObject,
-  ¿reducir el riesgo de bomba con la skill de "Detección de fallos"?
+### Loop completo
+```
+[Comprar geodo] → [Partir/revelar (frotar)] → [Procesar gema] → [Dinero]
+      ↑                                              ↓
+  (Regateo en Fase 3:                     baúl → brazo → tolva → máquina
+   negocias precio antes                  (cadena de automatización ya existente)
+   de ver el contenido)
+```
+
+### Tiers de geodo (5 niveles, reemplazan los 2 lotes actuales)
+| Tier | Nombre | Coste base | Contenido posible |
+|---|---|---|---|
+| 1 | Gravilla | ~15 | escoria / cuarzo / gema |
+| 2 | Piedra bruta | ~80 | escoria / mineral / gema / rara |
+| 3 | Geodo | ~450 | escoria / mineral / gema / rara / legendaria |
+| 4 | Cristal | ~2500 | mineral / gema / rara / legendaria |
+| 5 | Meteorito | ~18000 | gema / rara / legendaria / JACKPOT |
+
+*(Probabilidades exactas: a tunear al final, cuando toda la estructura esté construida.)*
+
+### Stat de suerte: Ojo de tasador (`nivelOjo`)
+- Cada tier tiene un nivel máximo de ojo (similar al Luck cap de Scritchy Scratchy)
+- Subir el ojo desplaza probabilidades hacia contenidos mejores
+- Se compra con EXP o dinero (a decidir) en la rama MINERALES del árbol
+
+### Cadena de automatización (nueva rama del árbol)
+```
+Manual (comprar y partir a mano)
+  → Triturador      compra y parte geodos solo
+    → Cinta         alimenta al triturador automáticamente
+      → Clasificador separa gemas por calidad → baúl existente
+        → Ojo electrónico  aplica nivel de ojo al procesado automático
+```
+La salida del Clasificador entra en el **baúl ya existente**, que el brazo recoge
+y la tolva manda a la máquina → el dinero llega sin tocar nada.
+
+### Mecánica de reveal
+- Misma ventana modal que los lotes actuales (frotar para revelar)
+- Temáticamente: la "mugre" es la roca bruta que se va partiendo al frotar
+- Efectos: destello dorado (gema), rojo (escoria/bomba), texto punch, partículas
+- BOMBA: "Mineral contaminado" — pierdes dinero (penalización variable por tier)
+
+### Integración con Regateo (Fase 3)
+Cuando un cliente trae un "lote de minerales", el regateo determina cuánto pagas
+antes de abrirlo. Comprar barato = mejor EV aunque el contenido sea aleatorio.
+La skill "Detección de fallos" podría revelar una pista del contenido antes de comprar.
+
+### Datos
+- `ItemDef` ya tiene `soloLote`, `esJackpot`, `esBomba`, `penalizacion` — sirven tal cual
+- `GameData` gana: `nivelOjo`, `nivelTriturador`, `nivelCinta`, `nivelClasificador`, `nivelOjoElectronico`
+- Los tiers de geodo se definen en código (lista estática) — mover a ScriptableObject cuando haya más contenido
+
+### Estado de implementación
+- ☐ 5 tiers en los botones de lote (reemplaza Bolsa/Caja)
+- ☐ Rama MINERALES en el árbol (Ojo → Triturador → Cinta → Clasificador → Ojo electrónico)
+- ☐ Triturador: compra y parte automáticamente
+- ☐ Cinta: alimenta al triturador
+- ☐ Clasificador: output al baúl
+- ☐ Ojo electrónico: aplica nivelOjo al auto-proceso
+- ☐ Balance y probabilidades (al final)
 
 ## 10b. UI / presentación (pendiente de pasada de diseño)
 

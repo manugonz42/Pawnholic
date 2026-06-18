@@ -173,7 +173,7 @@ namespace PawnShop
 
         // ----------------- Lotes (gambling: jackpot / bomba, revelados al limpiar) -----------------
         class LoteEntrada { public string nombre; public float peso; }
-        class LoteTier { public string nombre; public double coste; public LoteEntrada[] tabla; public Button boton; public Text texto; }
+        class LoteTier { public string nombre; public double coste; public LoteEntrada[] tabla; public int nivelOjoMax; public Button boton; public Text texto; }
         LoteTier[] lotes;
         bool esLote;                          // hay un LOTE abierto (en su ventana).
         bool loteResuelto;                    // el lote ya se reveló; esperando que el jugador RECOJA.
@@ -195,7 +195,7 @@ namespace PawnShop
         AudioClip sfxCobro, sfxAcierto, sfxRotura, sfxFrote, sfxCompra;
         float ultimoFrote;
 
-        enum Rama { Manual, Maquina, CompraVenta }
+        enum Rama { Manual, Maquina, Minerales, CompraVenta }
 
         class NodoMejora
         {
@@ -437,15 +437,29 @@ namespace PawnShop
         // ================= LOTES (gambling) =================
         void CrearLotes()
         {
-            // Pesos = probabilidad relativa. Números de PRIMERA PASADA: tunear al playtestear.
+            // Geodos: 5 tiers. Pesos = probabilidad relativa. Tunear al final cuando todo esté montado.
+            // Items actuales usados como placeholder hasta tener assets de minerales propios.
             lotes = new[]
             {
-                new LoteTier { nombre = "Bolsa de la calle", coste = 12, tabla = new[] {
-                    Ent("Chatarra", 45), Ent("Anillo", 16), Ent("Gema", 14), Ent("Reloj de bolsillo", 12),
+                new LoteTier { nombre = "Gravilla", coste = 15, nivelOjoMax = 3, tabla = new[] {
+                    Ent("Chatarra", 55), Ent("Anillo", 20), Ent("Gema", 12),
                     Ent("Diamante rosa", 7), Ent("Objeto robado", 6) } },
-                new LoteTier { nombre = "Caja de mercadillo", coste = 60, tabla = new[] {
-                    Ent("Chatarra", 32), Ent("Gema", 22), Ent("Reloj de bolsillo", 14),
-                    Ent("Diamante rosa", 13), Ent("Reloj de oro", 11), Ent("Objeto robado", 8) } },
+
+                new LoteTier { nombre = "Piedra bruta", coste = 80, nivelOjoMax = 6, tabla = new[] {
+                    Ent("Chatarra", 40), Ent("Anillo", 20), Ent("Gema", 18),
+                    Ent("Reloj de bolsillo", 10), Ent("Diamante rosa", 8), Ent("Objeto robado", 4) } },
+
+                new LoteTier { nombre = "Geodo", coste = 450, nivelOjoMax = 10, tabla = new[] {
+                    Ent("Chatarra", 25), Ent("Gema", 25), Ent("Reloj de bolsillo", 18),
+                    Ent("Diamante rosa", 15), Ent("Reloj de oro", 10), Ent("Objeto robado", 7) } },
+
+                new LoteTier { nombre = "Cristal", coste = 2500, nivelOjoMax = 15, tabla = new[] {
+                    Ent("Chatarra", 12), Ent("Gema", 22), Ent("Reloj de bolsillo", 20),
+                    Ent("Diamante rosa", 22), Ent("Reloj de oro", 18), Ent("Objeto robado", 6) } },
+
+                new LoteTier { nombre = "Meteorito", coste = 18000, nivelOjoMax = 22, tabla = new[] {
+                    Ent("Chatarra", 5), Ent("Reloj de bolsillo", 15), Ent("Diamante rosa", 28),
+                    Ent("Reloj de oro", 32), Ent("Objeto robado", 20) } },
             };
         }
 
@@ -873,6 +887,15 @@ namespace PawnShop
                 () => data.nivelBaul, () => data.nivelBaul++);
             AddNodoDual("maq_brazo", "Brazo automatico", Rama.Maquina, "maq_baul", "maq_tolva", true, 200, 1.5, 5,
                 () => data.nivelBrazo, () => data.nivelBrazo++);
+
+            // --- Rama MINERALES ---
+            // Ojo de tasador: activo (mejora probabilidades en geodos). Resto: estructura bloqueada.
+            AddNodo("min_ojo", "Ojo de tasador", Rama.Minerales, null, false, 40, 1.7, 22,
+                () => data.nivelOjo, () => data.nivelOjo++);
+            AddBloqueado("min_triturador",  "Triturador",            Rama.Minerales, "min_ojo");
+            AddBloqueado("min_cinta",       "Cinta de alimentacion", Rama.Minerales, "min_triturador");
+            AddBloqueado("min_clasificador","Clasificador de gemas", Rama.Minerales, "min_cinta");
+            AddBloqueado("min_ojo_elec",    "Ojo electronico",       Rama.Minerales, "min_clasificador");
 
             // --- Rama COMPRA-VENTA (aún no jugable: solo estructura del árbol) ---
             AddBloqueado("cv_mercadillo", "Acceso a mercadillo", Rama.CompraVenta, null);
@@ -1456,22 +1479,24 @@ namespace PawnShop
             CrearLotes();
             cajaMisterioTex = PixelArtFactory.CrearCajaMisterio();
 
-            // Un título y los botones de lote, abajo a la izquierda.
-            var titulo = CrearTexto(canvasT, "COMPRAR LOTE", 20, fuente, new Color(1f, 0.8f, 0.45f));
-            AnclarEnPantalla(titulo.rectTransform, 0.012f, 0.40f, 300, 30);
+            // Título y botones de geodo, izquierda central.
+            var titulo = CrearTexto(canvasT, "GEODOS", 20, fuente, new Color(1f, 0.8f, 0.45f));
             titulo.alignment = TextAnchor.MiddleLeft;
-            var tr = titulo.rectTransform; tr.pivot = new Vector2(0f, 0.5f); tr.anchorMin = tr.anchorMax = new Vector2(0.012f, 0.40f);
+            var tr = titulo.rectTransform;
+            tr.anchorMin = tr.anchorMax = tr.pivot = new Vector2(0.012f, 0.57f);
+            tr.sizeDelta = new Vector2(300, 28);
+            tr.anchoredPosition = Vector2.zero;
 
-            float y = 0.33f;
+            float y = 0.51f;
             foreach (var tier in lotes)
             {
                 var b = CrearBoton(canvasT, "", fuente, out tier.texto, () => ComprarLote(tier));
                 var rt = b.GetComponent<RectTransform>();
                 rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.012f, y);
-                rt.sizeDelta = new Vector2(320, 70);
+                rt.sizeDelta = new Vector2(300, 58);
                 rt.anchoredPosition = Vector2.zero;
                 tier.boton = b;
-                y -= 0.12f;
+                y -= 0.09f;
             }
         }
 
