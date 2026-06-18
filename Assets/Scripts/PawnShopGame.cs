@@ -61,8 +61,16 @@ namespace PawnShop
         const double VelPulidoPorNivel   = 0.01;        // cada nivel de velocidad acelera (~30s -> ~6s al máximo).
         const double CosteBaseMaqVel     = 28;    // Coste DINERO de la 1ª mejora de velocidad.
         const double CrecimientoMaqVel   = 1.22;
-        const double CosteBaseMaqRanura  = 60;    // Coste DINERO de la 1ª ranura extra.
+        const double CosteBaseMaqRanura  = 60;    // obsoleto (sustituido por tolva)
         const double CrecimientoMaqRanura = 2.2;
+
+        // ----------------- Balance: CADENA DE AUTOMATIZACIÓN -----------------
+        // Baúl (cofre) → Brazo → Tolva → Máquina
+        const float BaulX = 870f, BaulY = 60f;       // posición baúl en canvas (anchor centro)
+        const float TolvaX = 590f, TolvaY = 200f;    // posición tolva (encima de la máquina)
+        const float BrazoPivotX = 730f, BrazoPivotY = 130f; // pivot del brazo
+        const float BrazoLargo = 150f;                // longitud del brazo en px
+        const float BaulIntervaloBase = 20f;          // segundos entre items que llegan al baúl
 
         // ----------------- Balance: GENERAL -----------------
         const float  IntervaloAutoguardado = 5f;
@@ -85,8 +93,15 @@ namespace PawnShop
         float  ZonaVerdeMitad    => Mathf.Min(ZonaVerdeBase + ZonaVerdePorNivel * data.nivelManoFirme, ZonaVerdeMax);
         float  ProbRomper        => Mathf.Max(RomperMin, RomperBase - RomperReduccion * data.nivelManoFirme);
         double VelPulido         => VelPulidoBase + VelPulidoPorNivel * data.nivelMaquinaVel;
-        int    RanurasTotal      => Mathf.Min(1 + data.nivelMaquinaRanuras, MaxRanuras);
+        int    RanurasTotal      => data.nivelTolva >= 1 ? Mathf.Min(1 + data.nivelTolva, 3) : 1;
         bool   MaquinaComprada   => data.maquinaComprada >= 1;
+        bool   BaulComprado      => data.nivelBaul  >= 1;
+        bool   BrazoComprado     => data.nivelBrazo >= 1;
+        bool   TolvaComprada     => data.nivelTolva >= 1;
+        bool   CadenaCompleta    => BaulComprado && BrazoComprado && TolvaComprada;
+        int    BaulCapacidad     => 2 + data.nivelBaul * 2;           // 1→4, 2→6, 3→8, 4→10
+        float  BrazoCooldown     => Mathf.Max(2f, 12f - (data.nivelBrazo - 1) * 2f);
+        float  BrazoVelGiro      => 160f + data.nivelBrazo * 30f;
 
         // ----------------- Estado del trabajo a mano -----------------
         TipoTrabajo trabajoActual;
@@ -120,6 +135,16 @@ namespace PawnShop
         Text textoFrase;
         List<NodoMejora> nodos;
         float autoFeedTimer;
+
+        // ----------------- Estado de la cadena de automatización -----------------
+        int   baulItems;
+        float baulTimer;
+        bool  brazoCoroutineActiva;
+        float brazoAnguloActual;
+        float angleBaulPivot, angleTolvaPivot;
+        RectTransform baulRect, tolvaRect, brazoHombro, brazoCuerpo;
+        Text  baulTexto;
+        GameObject brazoPiezaGO;
 
         // ----------------- Clientes -----------------
         ClienteDef[] clientes;
@@ -160,7 +185,7 @@ namespace PawnShop
 
         class NodoMejora
         {
-            public string id, nombre, prereq;
+            public string id, nombre, prereq, prereq2;
             public Rama rama;
             public bool conDinero;          // true = cuesta dinero; false = EXP
             public double costeBase, crecimiento;
@@ -182,6 +207,11 @@ namespace PawnShop
             PrepararAudio();
             ConstruirUI();
             NuevoTrabajo();
+            // Si el juego se cargó con la cadena ya comprada, activar componentes y brazo
+            if (TolvaComprada && tolvaRect != null)  tolvaRect.gameObject.SetActive(true);
+            if (BaulComprado  && baulRect  != null)  baulRect.gameObject.SetActive(true);
+            if (BrazoComprado && brazoHombro != null) brazoHombro.gameObject.SetActive(true);
+            if (BrazoComprado && !brazoCoroutineActiva) StartCoroutine(CicloBrazo());
         }
 
         void PrepararAudio()
@@ -206,6 +236,7 @@ namespace PawnShop
         {
             ProcesarMaquina();
             GirarRueda();
+            ActualizarBaul();
 
             if (!enTransicion)
             {
@@ -799,21 +830,18 @@ namespace PawnShop
                 () => data.nivelManoFirme, () => data.nivelManoFirme++);
 
             // --- Rama MAQUINA (se paga con dinero) ---
-            // Raíz: COMPRAR la máquina (hito). Todo lo demás de la rama cuelga de aquí.
+            // Raíz: COMPRAR la máquina. Todo lo demás de la rama cuelga de aquí.
             AddNodo("maq_comprar", "Comprar maquina de pulido", Rama.Maquina, null, true, CosteMaquina, 1, 1,
                 () => data.maquinaComprada, () => data.maquinaComprada++);
             AddNodo("maq_vel", "Velocidad de pulido", Rama.Maquina, "maq_comprar", true, CosteBaseMaqVel, CrecimientoMaqVel, 14,
                 () => data.nivelMaquinaVel, () => data.nivelMaquinaVel++);
-            AddNodo("maq_ranuras", "Ranuras de la maquina", Rama.Maquina, "maq_vel", true, CosteBaseMaqRanura, CrecimientoMaqRanura, MaxRanuras - 1,
-                () => data.nivelMaquinaRanuras, () => data.nivelMaquinaRanuras++);
-            AddNodo("maq_baul", "Baul de items", Rama.Maquina, "maq_comprar", true, 90, 1, 1,
-                () => data.nivelBaul, () => data.nivelBaul++);
-            AddNodo("maq_cinta", "Cinta transportadora", Rama.Maquina, "maq_baul", true, 200, 1, 1,
-                () => data.nivelCinta, () => data.nivelCinta++);
-            AddNodo("maq_brazo", "Brazo automatico (auto-pulir)", Rama.Maquina, "maq_cinta", true, 450, 1, 1,
-                () => data.nivelBrazo, () => data.nivelBrazo++);
-            AddNodo("maq_tolva", "Tamano de tolva", Rama.Maquina, "maq_brazo", true, 130, 1.6, 6,
+            // Cadena de automatización: Baúl → Brazo → Tolva (solo funciona si los 3 están)
+            AddNodo("maq_tolva", "Tolva de entrada (+ranura)", Rama.Maquina, "maq_comprar", true, 90, 1.8, 3,
                 () => data.nivelTolva, () => data.nivelTolva++);
+            AddNodo("maq_baul", "Baul de sucios", Rama.Maquina, "maq_comprar", true, 80, 1.6, 4,
+                () => data.nivelBaul, () => data.nivelBaul++);
+            AddNodoDual("maq_brazo", "Brazo automatico", Rama.Maquina, "maq_baul", "maq_tolva", true, 200, 1.5, 5,
+                () => data.nivelBrazo, () => data.nivelBrazo++);
 
             // --- Rama COMPRA-VENTA (aún no jugable: solo estructura del árbol) ---
             AddBloqueado("cv_mercadillo", "Acceso a mercadillo", Rama.CompraVenta, null);
@@ -827,6 +855,12 @@ namespace PawnShop
                 costeBase = cb, crecimiento = cg, nivelMax = max, disponible = true, getNivel = get, subir = subir });
         }
 
+        void AddNodoDual(string id, string nombre, Rama rama, string prereq, string prereq2, bool dinero, double cb, double cg, int max, Func<int> get, Action subir)
+        {
+            nodos.Add(new NodoMejora { id = id, nombre = nombre, rama = rama, prereq = prereq, prereq2 = prereq2,
+                conDinero = dinero, costeBase = cb, crecimiento = cg, nivelMax = max, disponible = true, getNivel = get, subir = subir });
+        }
+
         void AddBloqueado(string id, string nombre, Rama rama, string prereq)
         {
             nodos.Add(new NodoMejora { id = id, nombre = nombre, rama = rama, prereq = prereq, conDinero = true,
@@ -835,7 +869,9 @@ namespace PawnShop
 
         NodoMejora BuscarNodo(string id) => nodos.Find(n => n.id == id);
         double CosteNodo(NodoMejora n) => Math.Floor(n.costeBase * Math.Pow(n.crecimiento, n.getNivel()));
-        bool PrereqOk(NodoMejora n) => string.IsNullOrEmpty(n.prereq) || BuscarNodo(n.prereq).getNivel() >= 1;
+        bool PrereqOk(NodoMejora n) =>
+            (string.IsNullOrEmpty(n.prereq)  || BuscarNodo(n.prereq).getNivel()  >= 1) &&
+            (string.IsNullOrEmpty(n.prereq2) || BuscarNodo(n.prereq2).getNivel() >= 1);
 
         void Comprar(NodoMejora n)
         {
@@ -843,8 +879,30 @@ namespace PawnShop
             double c = CosteNodo(n);
             if (n.conDinero) { if (data.dinero < c) return; data.dinero -= c; }
             else { if (data.exp < c) return; data.exp -= c; }
+            bool eraPrimero = n.getNivel() == 0;
             n.subir();
             Sonido(sfxCompra);
+            if (eraPrimero) OnComponenteComprado(n.id);
+        }
+
+        void OnComponenteComprado(string id)
+        {
+            switch (id)
+            {
+                case "maq_tolva":
+                    if (tolvaRect != null) StartCoroutine(AnimarCaida(tolvaRect, new Vector2(TolvaX, TolvaY)));
+                    break;
+                case "maq_baul":
+                    if (baulRect != null) StartCoroutine(AnimarCaida(baulRect, new Vector2(BaulX, BaulY)));
+                    break;
+                case "maq_brazo":
+                    if (brazoHombro != null)
+                    {
+                        StartCoroutine(AnimarCaida(brazoHombro, new Vector2(BrazoPivotX, BrazoPivotY)));
+                        if (!brazoCoroutineActiva) StartCoroutine(CicloBrazo());
+                    }
+                    break;
+            }
         }
 
         void AutoAlimentar()
@@ -1119,8 +1177,11 @@ namespace PawnShop
             ConstruirBotones(canvasGO.transform, fuente);
             ConstruirCliente(canvasGO.transform, fuente);   // cliente a la izquierda
             ConstruirMaquina(canvasGO.transform, fuente);   // máquina a la derecha
-            ConstruirLotes(canvasGO.transform, fuente);     // botones de compra de lotes (gambling)
-            ConstruirVentanaLote(canvasGO.transform, fuente);   // ventana modal de apertura de lote
+            ConstruirLotes(canvasGO.transform, fuente);
+            ConstruirVentanaLote(canvasGO.transform, fuente);
+            ConstruirBaul(canvasGO.transform);
+            ConstruirTolva(canvasGO.transform);
+            ConstruirBrazoAutomatico(canvasGO.transform);
             ConstruirVentanaMejoras(canvasGO.transform, fuente);
         }
 
@@ -1647,7 +1708,7 @@ namespace PawnShop
                 slotFill[i].anchorMax = new Vector2(f, 1f);
                 if (usable && slotActivo[i]) ocupadas++;
             }
-            string brazo = data.nivelBrazo >= 1 ? "  ·  brazo AUTO ON" : "";
+            string brazo = CadenaCompleta ? "  ·  brazo AUTO" : (BrazoComprado ? "  ·  brazo (sin cadena)" : "");
             double segsPieza = VelPulido > 0 ? 1.0 / VelPulido : 0;
             textoMaquina.text = "Pulido: " + ocupadas + "/" + RanurasTotal + " ranuras   ·   " + segsPieza.ToString("0") + "s/pieza" + brazo;
 
@@ -1706,6 +1767,205 @@ namespace PawnShop
             int i = 0;
             while (v >= 1000 && i < sufijos.Length - 1) { v /= 1000; i++; }
             return v.ToString("0.00") + sufijos[i];
+        }
+
+        // ================= CADENA DE AUTOMATIZACIÓN =================
+
+        void ConstruirBaul(Transform canvasT)
+        {
+            var go = new GameObject("Baul", typeof(RawImage));
+            go.transform.SetParent(canvasT, false);
+            baulRect = go.GetComponent<RectTransform>();
+            baulRect.anchorMin = baulRect.anchorMax = baulRect.pivot = new Vector2(0.5f, 0.5f);
+            baulRect.sizeDelta = new Vector2(150, 120);
+            baulRect.anchoredPosition = new Vector2(BaulX, BaulY);
+            go.GetComponent<RawImage>().texture = PixelArtFactory.CrearBaul();
+            go.GetComponent<RawImage>().raycastTarget = false;
+
+            baulTexto = CrearTexto(go.transform, "0/4", 18, fuente, new Color(0.9f, 0.8f, 0.5f));
+            var lt = baulTexto.GetComponent<RectTransform>();
+            lt.anchorMin = new Vector2(0f, 0f); lt.anchorMax = new Vector2(1f, 0f);
+            lt.pivot = new Vector2(0.5f, 1f);
+            lt.anchoredPosition = new Vector2(0f, -6f);
+            lt.sizeDelta = new Vector2(0f, 28f);
+
+            go.SetActive(false);
+        }
+
+        void ConstruirTolva(Transform canvasT)
+        {
+            var go = new GameObject("Tolva", typeof(RawImage));
+            go.transform.SetParent(canvasT, false);
+            tolvaRect = go.GetComponent<RectTransform>();
+            tolvaRect.anchorMin = tolvaRect.anchorMax = tolvaRect.pivot = new Vector2(0.5f, 0.5f);
+            tolvaRect.sizeDelta = new Vector2(120, 100);
+            tolvaRect.anchoredPosition = new Vector2(TolvaX, TolvaY);
+            go.GetComponent<RawImage>().texture = PixelArtFactory.CrearTolva();
+            go.GetComponent<RawImage>().raycastTarget = false;
+
+            go.SetActive(false);
+        }
+
+        void ConstruirBrazoAutomatico(Transform canvasT)
+        {
+            // Hombro: pivot de rotación
+            var hombro = new GameObject("BrazoHombro", typeof(Image));
+            hombro.transform.SetParent(canvasT, false);
+            brazoHombro = hombro.GetComponent<RectTransform>();
+            brazoHombro.anchorMin = brazoHombro.anchorMax = brazoHombro.pivot = new Vector2(0.5f, 0.5f);
+            brazoHombro.sizeDelta = new Vector2(24, 24);
+            brazoHombro.anchoredPosition = new Vector2(BrazoPivotX, BrazoPivotY);
+            hombro.GetComponent<Image>().color = new Color(0.55f, 0.58f, 0.65f, 1f);
+            hombro.GetComponent<Image>().raycastTarget = false;
+
+            // Cuerpo del brazo: hijo del hombro, rota con él
+            var cuerpo = new GameObject("BrazoCuerpo", typeof(Image));
+            cuerpo.transform.SetParent(hombro.transform, false);
+            brazoCuerpo = cuerpo.GetComponent<RectTransform>();
+            brazoCuerpo.anchorMin = brazoCuerpo.anchorMax = new Vector2(0.5f, 0f);
+            brazoCuerpo.pivot = new Vector2(0.5f, 0f);
+            brazoCuerpo.sizeDelta = new Vector2(14, BrazoLargo);
+            brazoCuerpo.anchoredPosition = Vector2.zero;
+            cuerpo.GetComponent<Image>().color = new Color(0.45f, 0.48f, 0.55f, 1f);
+            cuerpo.GetComponent<Image>().raycastTarget = false;
+
+            // Pieza en la punta del brazo (visible solo cuando lleva item)
+            brazoPiezaGO = new GameObject("BrazoPieza", typeof(Image));
+            brazoPiezaGO.transform.SetParent(cuerpo.transform, false);
+            var pr = brazoPiezaGO.GetComponent<RectTransform>();
+            pr.anchorMin = pr.anchorMax = new Vector2(0.5f, 1f);
+            pr.pivot = new Vector2(0.5f, 0.5f);
+            pr.sizeDelta = new Vector2(20, 20);
+            pr.anchoredPosition = Vector2.zero;
+            brazoPiezaGO.GetComponent<Image>().color = new Color(1f, 0.88f, 0.35f, 1f);
+            brazoPiezaGO.GetComponent<Image>().raycastTarget = false;
+            brazoPiezaGO.SetActive(false);
+
+            // Calcular ángulos hacia baúl y tolva desde el pivot
+            Vector2 pivot = new Vector2(BrazoPivotX, BrazoPivotY);
+            angleBaulPivot  = AnguloHacia(new Vector2(BaulX,  BaulY)  - pivot);
+            angleTolvaPivot = AnguloHacia(new Vector2(TolvaX, TolvaY) - pivot);
+            brazoAnguloActual = angleBaulPivot;
+            brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
+
+            hombro.SetActive(false);
+        }
+
+        /// <summary>Angulo Z (grados) que hace que un brazo apuntando hacia +Y local apunte hacia dir.</summary>
+        float AnguloHacia(Vector2 dir)
+        {
+            // Derivación: arm tip en local +Y rotado por Z=A → canvas offset = (-sin A, cos A)*len
+            // Queremos (-sin A, cos A) = normalize(dir) → A = atan2(-dir.x, dir.y)
+            return Mathf.Atan2(-dir.x, dir.y) * Mathf.Rad2Deg;
+        }
+
+        void ActualizarBaul()
+        {
+            if (!BaulComprado) return;
+            if (baulItems < BaulCapacidad)
+            {
+                baulTimer += Time.deltaTime;
+                if (baulTimer >= BaulIntervaloBase)
+                {
+                    baulTimer = 0f;
+                    baulItems++;
+                    Flotante(baulRect, "+1", new Color(0.9f, 0.75f, 0.4f), 20, new Vector2(0f, 30f));
+                }
+            }
+            if (baulTexto != null)
+            {
+                baulTexto.text = baulItems + "/" + BaulCapacidad;
+                baulTexto.color = baulItems == 0
+                    ? new Color(0.5f, 0.45f, 0.35f)
+                    : new Color(0.9f, 0.8f, 0.5f);
+            }
+        }
+
+        int SlotLibreIndex()
+        {
+            for (int i = 0; i < RanurasTotal; i++)
+                if (!slotActivo[i]) return i;
+            return -1;
+        }
+
+        // ----- Animación de caída al comprar componente -----
+        IEnumerator AnimarCaida(RectTransform rt, Vector2 posFinal)
+        {
+            rt.anchoredPosition = new Vector2(posFinal.x, posFinal.y + 520f);
+            rt.gameObject.SetActive(true);
+            float t = 0f; const float dur = 0.55f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = t / dur;
+                float y = posFinal.y + 520f * (1f - BounceEase(k));
+                rt.anchoredPosition = new Vector2(posFinal.x, y);
+                yield return null;
+            }
+            rt.anchoredPosition = posFinal;
+        }
+
+        static float BounceEase(float t)
+        {
+            if (t < 1f / 2.75f)  return 7.5625f * t * t;
+            if (t < 2f / 2.75f)  { t -= 1.5f   / 2.75f; return 7.5625f * t * t + 0.75f; }
+                                  { t -= 2.625f / 2.75f; return 7.5625f * t * t + 0.9375f; }
+        }
+
+        // ----- Ciclo principal del brazo automático -----
+        IEnumerator CicloBrazo()
+        {
+            brazoCoroutineActiva = true;
+            while (true)
+            {
+                // Esperar hasta que la cadena esté completa y haya items + hueco
+                while (!CadenaCompleta || baulItems <= 0 || SlotLibreIndex() < 0)
+                    yield return new WaitForSeconds(0.4f);
+
+                // 1. Girar hacia el baúl
+                yield return StartCoroutine(RotarBrazo(angleBaulPivot));
+
+                // 2. Coger item del baúl
+                baulItems = Mathf.Max(0, baulItems - 1);
+                ItemDef item = ItemAleatorio(it => it.limpiable && !it.soloLote);
+                if (brazoPiezaGO != null) brazoPiezaGO.SetActive(true);
+                Sonido(sfxCompra, 0.65f);
+                yield return new WaitForSeconds(0.18f);
+
+                // 3. Girar hacia la tolva
+                yield return StartCoroutine(RotarBrazo(angleTolvaPivot));
+
+                // 4. Depositar en ranura libre
+                int slot = SlotLibreIndex();
+                if (slot >= 0)
+                {
+                    slotActivo[slot] = true;
+                    slotProg[slot]   = 0;
+                    slotValor[slot]  = item.valorDinero;
+                    Sonido(sfxCompra, 0.9f);
+                    Flotante(tolvaRect, "▼", new Color(0.7f, 0.9f, 0.6f), 22, new Vector2(0f, 20f));
+                }
+                if (brazoPiezaGO != null) brazoPiezaGO.SetActive(false);
+                yield return new WaitForSeconds(0.22f);
+
+                // 5. Cooldown antes del siguiente ciclo
+                yield return new WaitForSeconds(BrazoCooldown);
+            }
+        }
+
+        IEnumerator RotarBrazo(float targetAngle)
+        {
+            float speed = BrazoVelGiro;
+            while (Mathf.Abs(Mathf.DeltaAngle(brazoAnguloActual, targetAngle)) > 0.5f)
+            {
+                brazoAnguloActual = Mathf.MoveTowardsAngle(brazoAnguloActual, targetAngle, speed * Time.deltaTime);
+                if (brazoHombro != null)
+                    brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
+                yield return null;
+            }
+            brazoAnguloActual = targetAngle;
+            if (brazoHombro != null)
+                brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
         }
     }
 }

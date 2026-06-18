@@ -307,6 +307,75 @@ namespace PawnShop
             }
         }
 
+        // ----------------- COMPONENTES DE AUTOMATIZACIÓN -----------------
+
+        /// <summary>Placeholder: cofre de madera donde se acumulan piezas sucias.</summary>
+        public static Texture2D CrearBaul(int S = 80)
+        {
+            var px = new Color32[S * S];
+            Color32 madera      = new Color32(130, 90,  50, 255);
+            Color32 maderaOsc   = new Color32( 90, 60,  30, 255);
+            Color32 maderaClara = new Color32(175, 130, 80, 255);
+            Color32 metal       = new Color32(140, 130, 100, 255);
+            Color32 borde       = new Color32( 45,  28,  12, 255);
+
+            // Cuerpo (parte baja en la textura = visual inferior)
+            Fill(px, S, S, 5, 5, S - 10, S - 25, madera);
+            // Tapa (parte alta en la textura = visual superior)
+            Fill(px, S, S, 5, S - 20, S - 10, 15, maderaClara);
+            // Línea divisoria tapa-cuerpo
+            HLine(px, S, S, 5, S - 6, S - 21, borde);
+            HLine(px, S, S, 5, S - 6, S - 22, maderaOsc);
+            // Vetas horizontales
+            HLine(px, S, S, 7, S - 8, 25, maderaOsc);
+            HLine(px, S, S, 7, S - 8, 40, maderaOsc);
+            // Cierre metálico centrado
+            Fill(px, S, S, S / 2 - 5, S - 24, 10, 8, metal);
+            FillCircle(px, S, S, S / 2, S - 18, 3, maderaOsc);
+            // Contorno
+            RectOutline(px, S, S, 5, 5, S - 10, S - 10, borde, 2);
+
+            var tex = new Texture2D(S, S, TextureFormat.RGBA32, false);
+            tex.SetPixels32(px); tex.Apply();
+            tex.filterMode = FilterMode.Point; tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
+        }
+
+        /// <summary>Placeholder: tolva (embudo) que alimenta la máquina de pulido.</summary>
+        public static Texture2D CrearTolva(int S = 80)
+        {
+            var px = new Color32[S * S];
+            Color32 metal    = new Color32(116, 124, 138, 255);
+            Color32 metalCl  = new Color32(158, 166, 180, 255);
+            Color32 metalOsc = new Color32( 80,  86, 100, 255);
+            Color32 borde    = new Color32( 44,  48,  58, 255);
+            Color32 interior = new Color32( 22,  24,  32, 255);
+
+            // Forma trapezoidal: ancha arriba (y alto), estrecha abajo (y bajo)
+            int yMin = 8, yMax = S - 8;
+            for (int y = yMin; y < yMax; y++)
+            {
+                float f = (float)(y - yMin) / (yMax - yMin); // 0=abajo, 1=arriba
+                int xl = (int)Mathf.Lerp(S / 2 - 8,  S / 2 - 30, f);
+                int xr = (int)Mathf.Lerp(S / 2 + 8,  S / 2 + 30, f);
+                bool esRim = (y <= yMin + 1 || y >= yMax - 2);
+                Color32 c = esRim ? metalOsc : (f > 0.85f ? metalCl : metal);
+                HLine(px, S, S, xl, xr, y, c);
+                if (!esRim && xr - xl > 4) HLine(px, S, S, xl + 2, xr - 2, y, interior);
+            }
+            // Rim superior con remaches
+            HLine(px, S, S, S / 2 - 30, S / 2 + 30, yMax - 1, metalCl);
+            HLine(px, S, S, S / 2 - 30, S / 2 + 30, yMax - 2, metalCl);
+            FillCircle(px, S, S, S / 2 - 26, yMax - 5, 2, metalCl);
+            FillCircle(px, S, S, S / 2 + 26, yMax - 5, 2, metalCl);
+            RectOutline(px, S, S, 0, 0, S, S, new Color32(0, 0, 0, 0), 0); // limpiar borde alpha
+
+            var tex = new Texture2D(S, S, TextureFormat.RGBA32, false);
+            tex.SetPixels32(px); tex.Apply();
+            tex.filterMode = FilterMode.Point; tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
+        }
+
         // ----------------- ITEMS para limpiar / reparar -----------------
 
         /// <summary>Genera los píxeles de un objeto según su forma (la usa ItemDef vía PawnShopGame).</summary>
