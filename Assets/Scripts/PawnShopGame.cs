@@ -2131,23 +2131,34 @@ namespace PawnShop
         IEnumerator CicloBrazo()
         {
             brazoCoroutineActiva = true;
-            // Asegurar garra abierta al arrancar
+            // Garra abierta + brazo en reposo en el baúl
             if (brazoProngL != null) brazoProngL.localRotation = Quaternion.Euler(0f, 0f,  28f);
             if (brazoProngR != null) brazoProngR.localRotation = Quaternion.Euler(0f, 0f, -28f);
+            brazoAnguloActual = angleBaulPivot;
+            if (brazoHombro != null) brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
 
             while (true)
             {
-                // Esperar hasta que la cadena esté completa y haya items + hueco
+                // Esperar en el baúl hasta que la cadena esté lista y haya items + hueco
                 while (!CadenaCompleta || baulItems <= 0 || SlotLibreIndex() < 0)
                     yield return new WaitForSeconds(0.4f);
 
-                // 1. Girar hacia el baúl (garra abierta)
-                yield return StartCoroutine(RotarBrazo(angleBaulPivot));
+                // El ciclo completo dura exactamente BrazoCooldown.
+                // Tiempo fijo de acciones: garra_cerrar(0.13) + pausa_agarre(0.10)
+                //                        + garra_abrir(0.13)  + pausa_deposito(0.15) = 0.51s
+                // Cada pierna = (BrazoCooldown - 0.51) / 2
+                const float TiempoAcciones = 0.51f;
+                float pierna = Mathf.Max(0.20f, (BrazoCooldown - TiempoAcciones) * 0.5f);
 
-                // 2. Cerrar garra: coger item
+                // 1. Cerrar garra: coger item del baúl
                 yield return StartCoroutine(AnimarGarra(true));
                 ItemDef item = ItemAleatorio(it => it.limpiable && !it.soloLote);
-                if (item == null) { yield return StartCoroutine(AnimarGarra(false)); yield return new WaitForSeconds(1f); continue; }
+                if (item == null)
+                {
+                    yield return StartCoroutine(AnimarGarra(false));
+                    yield return new WaitForSeconds(1f);
+                    continue;
+                }
                 baulItems = Mathf.Max(0, baulItems - 1);
                 if (brazoPiezaGO != null)
                 {
@@ -2156,12 +2167,12 @@ namespace PawnShop
                     StartCoroutine(EscalarHasta(brazoPiezaGO.transform, 0.14f));
                 }
                 Sonido(sfxCompra, 0.65f);
-                yield return new WaitForSeconds(0.1f);
+                yield return new WaitForSeconds(0.10f);
 
-                // 3. Girar hacia la tolva (garra cerrada, transportando item)
-                yield return StartCoroutine(RotarBrazo(angleTolvaPivot));
+                // 2. IDA: girar a tolva en exactamente `pierna` segundos
+                yield return StartCoroutine(RotarBrazo(angleTolvaPivot, pierna));
 
-                // 4. Abrir garra: soltar en ranura
+                // 3. Depositar en ranura
                 int slot = SlotLibreIndex();
                 if (slot >= 0)
                 {
@@ -2175,9 +2186,9 @@ namespace PawnShop
                 if (brazoPiezaGO != null) brazoPiezaGO.SetActive(false);
                 yield return new WaitForSeconds(0.15f);
 
-                // 5. Cooldown y volver al baúl a esperar el siguiente item
-                yield return new WaitForSeconds(BrazoCooldown);
-                yield return StartCoroutine(RotarBrazo(angleBaulPivot));
+                // 4. VUELTA: regresar al baúl en exactamente `pierna` segundos
+                yield return StartCoroutine(RotarBrazo(angleBaulPivot, pierna));
+                // → ciclo total ≈ BrazoCooldown; al subir nivel baja el cooldown y el brazo va más rápido
             }
         }
 
@@ -2202,12 +2213,12 @@ namespace PawnShop
             brazoProngR.localRotation = Quaternion.Euler(0f, 0f, targetR);
         }
 
-        IEnumerator RotarBrazo(float targetAngle)
+        IEnumerator RotarBrazo(float targetAngle, float durFija = -1f)
         {
             float startAngle = brazoAnguloActual;
             float span = Mathf.Abs(Mathf.DeltaAngle(startAngle, targetAngle));
             if (span < 0.5f) yield break;
-            float duration = span / BrazoVelGiro;
+            float duration = durFija > 0f ? durFija : span / BrazoVelGiro;
             float elapsed = 0f;
             while (elapsed < duration)
             {
