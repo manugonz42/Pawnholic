@@ -143,7 +143,7 @@ namespace PawnShop
         float brazoAnguloActual;
         float angleBaulPivot, angleTolvaPivot;
         RectTransform baulRect, tolvaRect, brazoHombro, brazoCuerpo;
-        RectTransform brazoBaseRect, brazoProngL, brazoProngR;
+        RectTransform brazoBaseRect, brazoProngL, brazoProngR, brazoSeg2;
         Text  baulTexto;
         GameObject brazoPiezaGO;
 
@@ -1811,33 +1811,55 @@ namespace PawnShop
 
         void ConstruirBrazoAutomatico(Transform canvasT)
         {
-            // Calcular ángulos primero (se usan en la rotación inicial)
             Vector2 pivotPos = new Vector2(BrazoPivotX, BrazoPivotY);
             angleBaulPivot  = AnguloHacia(new Vector2(BaulX,  BaulY)  - pivotPos);
             angleTolvaPivot = AnguloHacia(new Vector2(TolvaX, TolvaY) - pivotPos);
             brazoAnguloActual = angleBaulPivot;
 
-            // ── BASE ESTÁTICA (plataforma fija, estilo Factorio) ──
+            // ── BASE (placa estática con tornillos en esquinas) ──
             var baseGO = new GameObject("BrazoBase", typeof(Image));
             baseGO.transform.SetParent(canvasT, false);
             brazoBaseRect = baseGO.GetComponent<RectTransform>();
             brazoBaseRect.anchorMin = brazoBaseRect.anchorMax = brazoBaseRect.pivot = new Vector2(0.5f, 0.5f);
-            brazoBaseRect.sizeDelta = new Vector2(34, 34);
+            brazoBaseRect.sizeDelta = new Vector2(40, 40);
             brazoBaseRect.anchoredPosition = pivotPos;
-            baseGO.GetComponent<Image>().color = new Color(0.22f, 0.24f, 0.28f, 1f);
+            baseGO.GetComponent<Image>().color = new Color(0.18f, 0.20f, 0.24f, 1f);
             baseGO.GetComponent<Image>().raycastTarget = false;
 
-            var baseInner = new GameObject("BaseInner", typeof(Image));
-            baseInner.transform.SetParent(baseGO.transform, false);
-            var bir = baseInner.GetComponent<RectTransform>();
-            bir.anchorMin = bir.anchorMax = bir.pivot = new Vector2(0.5f, 0.5f);
-            bir.sizeDelta = new Vector2(18, 18);
-            bir.anchoredPosition = Vector2.zero;
-            baseInner.GetComponent<Image>().color = new Color(0.38f, 0.40f, 0.46f, 1f);
-            baseInner.GetComponent<Image>().raycastTarget = false;
+            // Cuatro tornillos en las esquinas
+            Vector2[] bolts = { new Vector2(-14f,14f), new Vector2(14f,14f), new Vector2(-14f,-14f), new Vector2(14f,-14f) };
+            foreach (var b in bolts)
+            {
+                var bGO = new GameObject("Bolt", typeof(Image));
+                bGO.transform.SetParent(baseGO.transform, false);
+                var br2 = bGO.GetComponent<RectTransform>();
+                br2.anchorMin = br2.anchorMax = br2.pivot = new Vector2(0.5f, 0.5f);
+                br2.sizeDelta = new Vector2(5, 5);
+                br2.anchoredPosition = b;
+                bGO.GetComponent<Image>().color = new Color(0.34f, 0.37f, 0.44f, 1f);
+                bGO.GetComponent<Image>().raycastTarget = false;
+            }
+            // Aro central (articulación)
+            var ringGO = new GameObject("Ring", typeof(Image));
+            ringGO.transform.SetParent(baseGO.transform, false);
+            var rr = ringGO.GetComponent<RectTransform>();
+            rr.anchorMin = rr.anchorMax = rr.pivot = new Vector2(0.5f, 0.5f);
+            rr.sizeDelta = new Vector2(24, 24);
+            rr.anchoredPosition = Vector2.zero;
+            ringGO.GetComponent<Image>().color = new Color(0.34f, 0.37f, 0.44f, 1f);
+            ringGO.GetComponent<Image>().raycastTarget = false;
+            // Pin central
+            var pinGO = new GameObject("Pin", typeof(Image));
+            pinGO.transform.SetParent(baseGO.transform, false);
+            var prn = pinGO.GetComponent<RectTransform>();
+            prn.anchorMin = prn.anchorMax = prn.pivot = new Vector2(0.5f, 0.5f);
+            prn.sizeDelta = new Vector2(10, 10);
+            prn.anchoredPosition = Vector2.zero;
+            pinGO.GetComponent<Image>().color = new Color(0.16f, 0.18f, 0.22f, 1f);
+            pinGO.GetComponent<Image>().raycastTarget = false;
             baseGO.SetActive(false);
 
-            // ── PIVOTE ROTANTE (solo transform, sin visual propio) ──
+            // ── PIVOTE (sin visual, solo transform de rotación) ──
             var hombro = new GameObject("BrazoHombro", typeof(RectTransform));
             hombro.transform.SetParent(canvasT, false);
             brazoHombro = hombro.GetComponent<RectTransform>();
@@ -1846,67 +1868,118 @@ namespace PawnShop
             brazoHombro.anchoredPosition = pivotPos;
             brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
 
-            // ── CUERPO DEL BRAZO (amarillo Factorio) ──
-            var cuerpo = new GameObject("BrazoCuerpo", typeof(Image));
-            cuerpo.transform.SetParent(hombro.transform, false);
-            brazoCuerpo = cuerpo.GetComponent<RectTransform>();
+            // ── SEGMENTO 1: hombro → codo (naranja oscuro) ──
+            var seg1GO = new GameObject("BrazoCuerpo", typeof(Image));
+            seg1GO.transform.SetParent(hombro.transform, false);
+            brazoCuerpo = seg1GO.GetComponent<RectTransform>();
             brazoCuerpo.anchorMin = brazoCuerpo.anchorMax = new Vector2(0.5f, 0f);
             brazoCuerpo.pivot = new Vector2(0.5f, 0f);
-            brazoCuerpo.sizeDelta = new Vector2(10, BrazoLargo);
+            brazoCuerpo.sizeDelta = new Vector2(9, 80);
             brazoCuerpo.anchoredPosition = Vector2.zero;
-            cuerpo.GetComponent<Image>().color = new Color(0.82f, 0.52f, 0.10f, 1f);
-            cuerpo.GetComponent<Image>().raycastTarget = false;
+            seg1GO.GetComponent<Image>().color = new Color(0.72f, 0.44f, 0.07f, 1f);
+            seg1GO.GetComponent<Image>().raycastTarget = false;
 
-            // Marcador de articulación en el centro del brazo
-            var juntaGO = new GameObject("Junta", typeof(Image));
-            juntaGO.transform.SetParent(cuerpo.transform, false);
-            var jr = juntaGO.GetComponent<RectTransform>();
-            jr.anchorMin = jr.anchorMax = jr.pivot = new Vector2(0.5f, 0.5f);
-            jr.sizeDelta = new Vector2(16, 16);
-            jr.anchoredPosition = Vector2.zero;
-            juntaGO.GetComponent<Image>().color = new Color(0.22f, 0.24f, 0.28f, 1f);
-            juntaGO.GetComponent<Image>().raycastTarget = false;
+            // Destello lateral en Seg1
+            var hl1GO = new GameObject("Hl1", typeof(Image));
+            hl1GO.transform.SetParent(seg1GO.transform, false);
+            var hl1r = hl1GO.GetComponent<RectTransform>();
+            hl1r.anchorMin = hl1r.anchorMax = new Vector2(0.5f, 0.5f);
+            hl1r.pivot = new Vector2(0.5f, 0.5f);
+            hl1r.sizeDelta = new Vector2(3, 70);
+            hl1r.anchoredPosition = new Vector2(-2f, 0f);
+            hl1GO.GetComponent<Image>().color = new Color(1f, 0.72f, 0.22f, 0.40f);
+            hl1GO.GetComponent<Image>().raycastTarget = false;
 
-            // ── GARRA EN LA PUNTA (estilo inserter Factorio) ──
+            // ── SEGMENTO 2: codo → garra (naranja más claro, hijo del extremo de Seg1) ──
+            var seg2GO = new GameObject("BrazoSeg2", typeof(Image));
+            seg2GO.transform.SetParent(seg1GO.transform, false);
+            brazoSeg2 = seg2GO.GetComponent<RectTransform>();
+            brazoSeg2.anchorMin = brazoSeg2.anchorMax = new Vector2(0.5f, 1f);   // anclado al extremo de Seg1
+            brazoSeg2.pivot = new Vector2(0.5f, 0f);                              // rota desde el codo
+            brazoSeg2.sizeDelta = new Vector2(9, 80);
+            brazoSeg2.anchoredPosition = Vector2.zero;
+            seg2GO.GetComponent<Image>().color = new Color(0.84f, 0.54f, 0.11f, 1f);
+            seg2GO.GetComponent<Image>().raycastTarget = false;
+
+            // Destello lateral en Seg2
+            var hl2GO = new GameObject("Hl2", typeof(Image));
+            hl2GO.transform.SetParent(seg2GO.transform, false);
+            var hl2r = hl2GO.GetComponent<RectTransform>();
+            hl2r.anchorMin = hl2r.anchorMax = new Vector2(0.5f, 0.5f);
+            hl2r.pivot = new Vector2(0.5f, 0.5f);
+            hl2r.sizeDelta = new Vector2(3, 70);
+            hl2r.anchoredPosition = new Vector2(-2f, 0f);
+            hl2GO.GetComponent<Image>().color = new Color(1f, 0.75f, 0.25f, 0.40f);
+            hl2GO.GetComponent<Image>().raycastTarget = false;
+
+            // Articulación del codo (base de Seg2)
+            var codoGO = new GameObject("Codo", typeof(Image));
+            codoGO.transform.SetParent(seg2GO.transform, false);
+            var codoR = codoGO.GetComponent<RectTransform>();
+            codoR.anchorMin = codoR.anchorMax = codoR.pivot = new Vector2(0.5f, 0f);
+            codoR.sizeDelta = new Vector2(15, 15);
+            codoR.anchoredPosition = Vector2.zero;
+            codoGO.GetComponent<Image>().color = new Color(0.18f, 0.20f, 0.24f, 1f);
+            codoGO.GetComponent<Image>().raycastTarget = false;
+            var codoIGO = new GameObject("CodoI", typeof(Image));
+            codoIGO.transform.SetParent(seg2GO.transform, false);
+            var codoIR = codoIGO.GetComponent<RectTransform>();
+            codoIR.anchorMin = codoIR.anchorMax = codoIR.pivot = new Vector2(0.5f, 0f);
+            codoIR.sizeDelta = new Vector2(8, 8);
+            codoIR.anchoredPosition = Vector2.zero;
+            codoIGO.GetComponent<Image>().color = new Color(0.36f, 0.40f, 0.48f, 1f);
+            codoIGO.GetComponent<Image>().raycastTarget = false;
+
+            // ── GARRA EN LA PUNTA DE SEG2 ──
             var garraGO = new GameObject("Garra", typeof(RectTransform));
-            garraGO.transform.SetParent(cuerpo.transform, false);
+            garraGO.transform.SetParent(seg2GO.transform, false);
             var garraRt = garraGO.GetComponent<RectTransform>();
             garraRt.anchorMin = garraRt.anchorMax = new Vector2(0.5f, 1f);
             garraRt.pivot = new Vector2(0.5f, 0f);
             garraRt.sizeDelta = Vector2.zero;
             garraRt.anchoredPosition = Vector2.zero;
 
-            // Prong izquierdo: pivot en esquina inferior-derecha
+            // Palma (base horizontal que une los dos prongs)
+            var palmaGO = new GameObject("Palma", typeof(Image));
+            palmaGO.transform.SetParent(garraGO.transform, false);
+            var palmaR = palmaGO.GetComponent<RectTransform>();
+            palmaR.anchorMin = palmaR.anchorMax = palmaR.pivot = new Vector2(0.5f, 0f);
+            palmaR.sizeDelta = new Vector2(20, 5);
+            palmaR.anchoredPosition = Vector2.zero;
+            palmaGO.GetComponent<Image>().color = new Color(0.84f, 0.54f, 0.11f, 1f);
+            palmaGO.GetComponent<Image>().raycastTarget = false;
+
+            // Prong izquierdo
             var prongLGO = new GameObject("ProngL", typeof(Image));
             prongLGO.transform.SetParent(garraGO.transform, false);
             brazoProngL = prongLGO.GetComponent<RectTransform>();
             brazoProngL.anchorMin = brazoProngL.anchorMax = new Vector2(0.5f, 0f);
             brazoProngL.pivot = new Vector2(1f, 0f);
-            brazoProngL.sizeDelta = new Vector2(7, 20);
-            brazoProngL.anchoredPosition = new Vector2(-1f, 0f);
+            brazoProngL.sizeDelta = new Vector2(7, 22);
+            brazoProngL.anchoredPosition = new Vector2(-1f, 5f);
             prongLGO.GetComponent<Image>().color = new Color(0.94f, 0.64f, 0.14f, 1f);
             prongLGO.GetComponent<Image>().raycastTarget = false;
-            brazoProngL.localRotation = Quaternion.Euler(0f, 0f, 28f);   // abierta por defecto
+            brazoProngL.localRotation = Quaternion.Euler(0f, 0f, 28f);
 
-            // Prong derecho: pivot en esquina inferior-izquierda
+            // Prong derecho
             var prongRGO = new GameObject("ProngR", typeof(Image));
             prongRGO.transform.SetParent(garraGO.transform, false);
             brazoProngR = prongRGO.GetComponent<RectTransform>();
             brazoProngR.anchorMin = brazoProngR.anchorMax = new Vector2(0.5f, 0f);
             brazoProngR.pivot = new Vector2(0f, 0f);
-            brazoProngR.sizeDelta = new Vector2(7, 20);
-            brazoProngR.anchoredPosition = new Vector2(1f, 0f);
+            brazoProngR.sizeDelta = new Vector2(7, 22);
+            brazoProngR.anchoredPosition = new Vector2(1f, 5f);
             prongRGO.GetComponent<Image>().color = new Color(0.94f, 0.64f, 0.14f, 1f);
             prongRGO.GetComponent<Image>().raycastTarget = false;
-            brazoProngR.localRotation = Quaternion.Euler(0f, 0f, -28f);  // abierta por defecto
+            brazoProngR.localRotation = Quaternion.Euler(0f, 0f, -28f);
 
-            // Item entre los prongs (visible mientras transporta)
+            // Item transportado (entre los prongs)
             brazoPiezaGO = new GameObject("BrazoPieza", typeof(Image));
             brazoPiezaGO.transform.SetParent(garraGO.transform, false);
             var pr = brazoPiezaGO.GetComponent<RectTransform>();
             pr.anchorMin = pr.anchorMax = pr.pivot = new Vector2(0.5f, 0.5f);
             pr.sizeDelta = new Vector2(12, 12);
-            pr.anchoredPosition = new Vector2(0f, 10f);
+            pr.anchoredPosition = new Vector2(0f, 14f);
             brazoPiezaGO.GetComponent<Image>().color = new Color(1f, 0.90f, 0.35f, 1f);
             brazoPiezaGO.GetComponent<Image>().raycastTarget = false;
             brazoPiezaGO.SetActive(false);
@@ -1996,7 +2069,12 @@ namespace PawnShop
                 yield return StartCoroutine(AnimarGarra(true));
                 baulItems = Mathf.Max(0, baulItems - 1);
                 ItemDef item = ItemAleatorio(it => it.limpiable && !it.soloLote);
-                if (brazoPiezaGO != null) brazoPiezaGO.SetActive(true);
+                if (brazoPiezaGO != null)
+                {
+                    brazoPiezaGO.transform.localScale = Vector3.zero;
+                    brazoPiezaGO.SetActive(true);
+                    StartCoroutine(EscalarHasta(brazoPiezaGO.transform, 0.14f));
+                }
                 Sonido(sfxCompra, 0.65f);
                 yield return new WaitForSeconds(0.1f);
 
@@ -2045,17 +2123,45 @@ namespace PawnShop
 
         IEnumerator RotarBrazo(float targetAngle)
         {
-            float speed = BrazoVelGiro;
-            while (Mathf.Abs(Mathf.DeltaAngle(brazoAnguloActual, targetAngle)) > 0.5f)
+            float startAngle = brazoAnguloActual;
+            float span = Mathf.Abs(Mathf.DeltaAngle(startAngle, targetAngle));
+            if (span < 0.5f) yield break;
+            float duration = span / BrazoVelGiro;
+            float elapsed = 0f;
+            while (elapsed < duration)
             {
-                brazoAnguloActual = Mathf.MoveTowardsAngle(brazoAnguloActual, targetAngle, speed * Time.deltaTime);
+                elapsed += Time.deltaTime;
+                float t    = Mathf.Clamp01(elapsed / duration);
+                float tE   = EaseInOut(t);
+                brazoAnguloActual = Mathf.LerpAngle(startAngle, targetAngle, tE);
                 if (brazoHombro != null)
                     brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
+                // Codo: arco sinusoidal (se curva en el centro del giro, plano al inicio y al final)
+                float bend = Mathf.Sin(t * Mathf.PI) * 26f;
+                if (brazoSeg2 != null)
+                    brazoSeg2.localRotation = Quaternion.Euler(0f, 0f, bend);
                 yield return null;
             }
             brazoAnguloActual = targetAngle;
             if (brazoHombro != null)
                 brazoHombro.localRotation = Quaternion.Euler(0f, 0f, brazoAnguloActual);
+            if (brazoSeg2 != null)
+                brazoSeg2.localRotation = Quaternion.Euler(0f, 0f, 0f);
+        }
+
+        static float EaseInOut(float t) =>
+            t < 0.5f ? 4f * t * t * t : 1f - Mathf.Pow(-2f * t + 2f, 3f) / 2f;
+
+        IEnumerator EscalarHasta(Transform tr, float dur)
+        {
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                tr.localScale = Vector3.one * EaseInOut(Mathf.Clamp01(t / dur));
+                yield return null;
+            }
+            tr.localScale = Vector3.one;
         }
     }
 }
