@@ -501,6 +501,13 @@ namespace PawnShop
             data.dinero -= tier.coste;
             Sonido(sfxCompra);
 
+            // Con Triturador: procesado instantáneo, sin modal
+            if (data.nivelTriturador >= 1)
+            {
+                TriturarGeodo(tier);
+                return;
+            }
+
             esLote = true;
             loteResuelto = false;
             trabajoActual = TipoTrabajo.Limpieza;
@@ -515,6 +522,33 @@ namespace PawnShop
             loteRecogerBoton.gameObject.SetActive(false);
             loteFlash.color = new Color(1f, 1f, 1f, 0f);
             StartCoroutine(EfectoAbrir());
+        }
+
+        void TriturarGeodo(LoteTier tier)
+        {
+            var ancla = tier.boton != null ? tier.boton.GetComponent<RectTransform>() : baulRect;
+            ItemDef item = SortearLote(tier);
+
+            if (item != null && item.esBomba)
+            {
+                double pen = item.penalizacion;
+                data.dinero = Math.Max(0, data.dinero - pen);
+                Flotante(ancla, "BOMBA  -" + Formatear(pen), new Color(0.95f, 0.25f, 0.2f), 24, new Vector2(60f, 0f));
+                Sonido(sfxRotura, 0.85f);
+                StartCoroutine(PulsarEscala(ancla, 0.88f, 0.20f));
+            }
+            else if (item != null && item.valorDinero > 0)
+            {
+                double val = item.valorDinero;
+                data.dinero += val;
+                bool jackpot = item.esJackpot;
+                Color col = jackpot ? new Color(1f, 0.88f, 0.2f, 1f) : new Color(0.55f, 0.92f, 0.45f, 1f);
+                string label = jackpot ? "JACKPOT  +" + Formatear(val) : "+" + Formatear(val);
+                Flotante(ancla, label, col, jackpot ? 28 : 22, new Vector2(60f, 0f));
+                Sonido(jackpot ? sfxCobro : sfxAcierto, jackpot ? 1.15f : 0.9f);
+                if (jackpot) StartCoroutine(PulsarEscala(ancla, 1.22f, 0.22f));
+            }
+            // chatarra (valorDinero == 0, no bomba): se descarta silenciosamente
         }
 
         void IniciarLimpiezaLote()
@@ -910,7 +944,8 @@ namespace PawnShop
             // Ojo de tasador: activo (mejora probabilidades en geodos). Resto: estructura bloqueada.
             AddNodo("min_ojo", "Ojo de tasador", Rama.Minerales, null, false, 40, 1.7, 22,
                 () => data.nivelOjo, () => data.nivelOjo++);
-            AddBloqueado("min_triturador",  "Triturador",            Rama.Minerales, "min_ojo");
+            AddNodo("min_triturador", "Triturador", Rama.Minerales, "min_ojo", true, 300, 1, 1,
+                () => data.nivelTriturador, () => data.nivelTriturador++);
             AddBloqueado("min_cinta",       "Cinta de alimentacion", Rama.Minerales, "min_triturador");  // usa data.nivelCintaGeodo
             AddBloqueado("min_clasificador","Clasificador de gemas", Rama.Minerales, "min_cinta");
             AddBloqueado("min_ojo_elec",    "Ojo electronico",       Rama.Minerales, "min_clasificador");
