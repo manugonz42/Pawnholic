@@ -501,13 +501,6 @@ namespace PawnShop
             data.dinero -= tier.coste;
             Sonido(sfxCompra);
 
-            // Con Triturador: procesado instantáneo, sin modal
-            if (data.nivelTriturador >= 1)
-            {
-                TriturarGeodo(tier);
-                return;
-            }
-
             esLote = true;
             loteResuelto = false;
             trabajoActual = TipoTrabajo.Limpieza;
@@ -607,12 +600,31 @@ namespace PawnShop
             }
             else
             {
-                data.dinero += itemActual.valorDinero;
-                loteResultado.text = itemActual.nombreItem + "  +" + Formatear(itemActual.valorDinero);
-                loteResultado.color = new Color(0.7f, 1f, 0.75f);
-                FlashLote(new Color(0.4f, 0.9f, 0.45f));
-                Burst(new Color(0.45f, 0.95f, 0.55f), 16, 420f, true);
-                Sonido(sfxCobro);
+                // Con Clasificador: items limpiables van al baúl para que el brazo los procese.
+                // Sin Clasificador (o baúl lleno, o item soloLote): venta directa.
+                bool clasificar = data.nivelClasificador >= 1
+                                  && itemActual != null
+                                  && itemActual.limpiable
+                                  && !itemActual.soloLote
+                                  && baulItems < BaulCapacidad;
+                if (clasificar)
+                {
+                    baulItems++;
+                    loteResultado.text = itemActual.nombreItem + "  → BAUL";
+                    loteResultado.color = new Color(0.55f, 0.88f, 1f);
+                    FlashLote(new Color(0.3f, 0.75f, 1f));
+                    Burst(new Color(0.4f, 0.8f, 1f), 16, 400f, true);
+                    Sonido(sfxAcierto, 1.05f);
+                }
+                else
+                {
+                    data.dinero += itemActual.valorDinero;
+                    loteResultado.text = itemActual.nombreItem + "  +" + Formatear(itemActual.valorDinero);
+                    loteResultado.color = new Color(0.7f, 1f, 0.75f);
+                    FlashLote(new Color(0.4f, 0.9f, 0.45f));
+                    Burst(new Color(0.45f, 0.95f, 0.55f), 16, 420f, true);
+                    Sonido(sfxCobro);
+                }
             }
 
             StartCoroutine(PunchTexto(loteResultado.rectTransform));
@@ -944,10 +956,10 @@ namespace PawnShop
             // Ojo de tasador: activo (mejora probabilidades en geodos). Resto: estructura bloqueada.
             AddNodo("min_ojo", "Ojo de tasador", Rama.Minerales, null, false, 40, 1.7, 22,
                 () => data.nivelOjo, () => data.nivelOjo++);
-            AddNodo("min_triturador", "Triturador", Rama.Minerales, "min_ojo", true, 300, 1, 1,
-                () => data.nivelTriturador, () => data.nivelTriturador++);
-            AddBloqueado("min_cinta",       "Cinta de alimentacion", Rama.Minerales, "min_triturador");  // usa data.nivelCintaGeodo
-            AddBloqueado("min_clasificador","Clasificador de gemas", Rama.Minerales, "min_cinta");
+            AddBloqueado("min_triturador",  "Triturador",            Rama.Minerales, "min_ojo");
+            AddBloqueado("min_cinta",       "Cinta de alimentacion", Rama.Minerales, "min_triturador");
+            AddNodo("min_clasificador", "Clasificador de gemas", Rama.Minerales, "min_ojo", true, 800, 1, 1,
+                () => data.nivelClasificador, () => data.nivelClasificador++);
             AddBloqueado("min_ojo_elec",    "Ojo electronico",       Rama.Minerales, "min_clasificador");
 
             // --- Rama COMPRA-VENTA (aún no jugable: solo estructura del árbol) ---
