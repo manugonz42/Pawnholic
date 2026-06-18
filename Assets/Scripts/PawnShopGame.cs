@@ -61,8 +61,6 @@ namespace PawnShop
         const double VelPulidoPorNivel   = 0.01;        // cada nivel de velocidad acelera (~30s -> ~6s al máximo).
         const double CosteBaseMaqVel     = 28;    // Coste DINERO de la 1ª mejora de velocidad.
         const double CrecimientoMaqVel   = 1.22;
-        const double CosteBaseMaqRanura  = 60;    // obsoleto (sustituido por tolva)
-        const double CrecimientoMaqRanura = 2.2;
 
         // ----------------- Balance: CADENA DE AUTOMATIZACIÓN -----------------
         // Baúl (cofre) → Brazo → Tolva → Máquina
@@ -144,7 +142,8 @@ namespace PawnShop
         float angleBaulPivot, angleTolvaPivot;
         RectTransform baulRect, tolvaRect, brazoHombro, brazoCuerpo;
         RectTransform brazoBaseRect, brazoProngL, brazoProngR, brazoSeg2;
-        Text  baulTexto;
+        RectTransform tolvaConectorRect;
+        Text  baulTexto, tolvaLabel;
         GameObject brazoPiezaGO;
 
         // ----------------- Clientes -----------------
@@ -209,8 +208,9 @@ namespace PawnShop
             ConstruirUI();
             NuevoTrabajo();
             // Si el juego se cargó con la cadena ya comprada, activar componentes y brazo
-            if (TolvaComprada && tolvaRect != null)  tolvaRect.gameObject.SetActive(true);
-            if (BaulComprado  && baulRect  != null)  baulRect.gameObject.SetActive(true);
+            if (TolvaComprada && tolvaRect        != null) tolvaRect.gameObject.SetActive(true);
+            if (TolvaComprada && tolvaConectorRect != null) tolvaConectorRect.gameObject.SetActive(true);
+            if (BaulComprado  && baulRect          != null) baulRect.gameObject.SetActive(true);
             if (BrazoComprado && brazoHombro   != null) brazoHombro.gameObject.SetActive(true);
             if (BrazoComprado && brazoBaseRect != null) brazoBaseRect.gameObject.SetActive(true);
             if (BrazoComprado && !brazoCoroutineActiva) StartCoroutine(CicloBrazo());
@@ -276,9 +276,6 @@ namespace PawnShop
                 }
             }
 
-            // AUTO-ALIMENTADO DESACTIVADO (2026-06-17): la máquina solo pule lo que el jugador
-            // inserta A MANO (arrastrando/click). Antes el "brazo" la alimentaba sola y no gustó.
-            // Se conserva AutoAlimentar() por si se retoma la automatización más adelante.
         }
 
         /// <summary>Mete el objeto ACTUAL del banco en la primera ranura libre y saca un trabajo nuevo.</summary>
@@ -893,6 +890,7 @@ namespace PawnShop
             {
                 case "maq_tolva":
                     if (tolvaRect != null) StartCoroutine(AnimarCaida(tolvaRect, new Vector2(TolvaX, TolvaY)));
+                    if (tolvaConectorRect != null) tolvaConectorRect.gameObject.SetActive(true);
                     break;
                 case "maq_baul":
                     if (baulRect != null) StartCoroutine(AnimarCaida(baulRect, new Vector2(BaulX, BaulY)));
@@ -906,12 +904,6 @@ namespace PawnShop
                     }
                     break;
             }
-        }
-
-        void AutoAlimentar()
-        {
-            for (int i = 0; i < RanurasTotal; i++)
-                if (!slotActivo[i]) { slotActivo[i] = true; slotProg[i] = 0; slotValor[i] = items[UnityEngine.Random.Range(0, items.Length)].valorDinero; return; }
         }
 
         // ================= FEEDBACK (juice) =================
@@ -1714,6 +1706,8 @@ namespace PawnShop
             string brazo = CadenaCompleta ? "  ·  brazo AUTO" : (BrazoComprado ? "  ·  brazo (sin cadena)" : "");
             double segsPieza = VelPulido > 0 ? 1.0 / VelPulido : 0;
             textoMaquina.text = "Pulido: " + ocupadas + "/" + RanurasTotal + " ranuras   ·   " + segsPieza.ToString("0") + "s/pieza" + brazo;
+            if (tolvaLabel != null)
+                tolvaLabel.text = TolvaComprada ? "↓ " + RanurasTotal + " ranuras" : "";
 
             if (ventanaMejoras != null && ventanaMejoras.activeSelf)
                 ActualizarNodos();
@@ -1797,6 +1791,18 @@ namespace PawnShop
 
         void ConstruirTolva(Transform canvasT)
         {
+            // Conector visual entre tolva y máquina (tubo de bajada)
+            // Tolva bottom = TolvaY - 50 = 150; machine top = -20 + 140 = 120. Centro = 135, alto = 32.
+            var cGO = new GameObject("TolvaConector", typeof(Image));
+            cGO.transform.SetParent(canvasT, false);
+            tolvaConectorRect = cGO.GetComponent<RectTransform>();
+            tolvaConectorRect.anchorMin = tolvaConectorRect.anchorMax = tolvaConectorRect.pivot = new Vector2(0.5f, 0.5f);
+            tolvaConectorRect.sizeDelta = new Vector2(10, 32);
+            tolvaConectorRect.anchoredPosition = new Vector2(TolvaX, 135f);
+            cGO.GetComponent<Image>().color = new Color(0.20f, 0.22f, 0.26f, 1f);
+            cGO.GetComponent<Image>().raycastTarget = false;
+            cGO.SetActive(false);
+
             var go = new GameObject("Tolva", typeof(RawImage));
             go.transform.SetParent(canvasT, false);
             tolvaRect = go.GetComponent<RectTransform>();
@@ -1805,6 +1811,14 @@ namespace PawnShop
             tolvaRect.anchoredPosition = new Vector2(TolvaX, TolvaY);
             go.GetComponent<RawImage>().texture = PixelArtFactory.CrearTolva();
             go.GetComponent<RawImage>().raycastTarget = false;
+
+            // Label: ranuras que aporta la tolva
+            tolvaLabel = CrearTexto(go.transform, "", 17, fuente, new Color(0.75f, 0.88f, 0.65f));
+            var lr = tolvaLabel.GetComponent<RectTransform>();
+            lr.anchorMin = new Vector2(0f, 0f); lr.anchorMax = new Vector2(1f, 0f);
+            lr.pivot = new Vector2(0.5f, 1f);
+            lr.anchoredPosition = new Vector2(0f, -5f);
+            lr.sizeDelta = new Vector2(0f, 26f);
 
             go.SetActive(false);
         }
@@ -2067,8 +2081,9 @@ namespace PawnShop
 
                 // 2. Cerrar garra: coger item
                 yield return StartCoroutine(AnimarGarra(true));
-                baulItems = Mathf.Max(0, baulItems - 1);
                 ItemDef item = ItemAleatorio(it => it.limpiable && !it.soloLote);
+                if (item == null) { yield return StartCoroutine(AnimarGarra(false)); yield return new WaitForSeconds(1f); continue; }
+                baulItems = Mathf.Max(0, baulItems - 1);
                 if (brazoPiezaGO != null)
                 {
                     brazoPiezaGO.transform.localScale = Vector3.zero;
