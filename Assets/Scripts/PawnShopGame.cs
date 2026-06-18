@@ -1810,6 +1810,7 @@ namespace PawnShop
             go.GetComponent<RawImage>().texture = PixelArtFactory.CrearBaul();
             go.GetComponent<RawImage>().raycastTarget = true;
             HacerArrastrable(baulRect);
+            RegistrarTrigger(baulRect.GetComponent<EventTrigger>(), EventTriggerType.PointerClick, _ => MeterItemEnBaul());
             pcBaulOut = CrearIndicador(go.transform, baulRect, new Vector2(-65f, 5f));
 
             baulTexto = CrearTexto(go.transform, "0/4", 18, fuente, new Color(0.9f, 0.8f, 0.5f));
@@ -2051,16 +2052,6 @@ namespace PawnShop
         void ActualizarBaul()
         {
             if (!BaulComprado) return;
-            if (baulItems < BaulCapacidad)
-            {
-                baulTimer += Time.deltaTime;
-                if (baulTimer >= BaulIntervaloBase)
-                {
-                    baulTimer = 0f;
-                    baulItems++;
-                    Flotante(baulRect, "+1", new Color(0.9f, 0.75f, 0.4f), 20, new Vector2(0f, 30f));
-                }
-            }
             if (baulTexto != null)
             {
                 baulTexto.text = baulItems + "/" + BaulCapacidad;
@@ -2068,6 +2059,68 @@ namespace PawnShop
                     ? new Color(0.5f, 0.45f, 0.35f)
                     : new Color(0.9f, 0.8f, 0.5f);
             }
+        }
+
+        void MeterItemEnBaul()
+        {
+            if (!BaulComprado)    return;
+            if (enTransicion)     return;
+            if (esLote)           return;
+            if (itemActual == null) return;
+            if (trabajoActual != TipoTrabajo.Limpieza) return;
+            if (baulItems >= BaulCapacidad)
+            {
+                Flotante(baulRect, "LLENO", new Color(0.9f, 0.35f, 0.25f), 20, new Vector2(0f, 30f));
+                return;
+            }
+            baulItems++;
+            NuevoTrabajo();
+            Sonido(sfxCompra, 0.75f);
+            StartCoroutine(AnimarItemEnBaul());
+        }
+
+        IEnumerator AnimarItemEnBaul()
+        {
+            // Icono dorado que vuela del tapete al baúl
+            var go = new GameObject("ItemBaul", typeof(Image));
+            go.transform.SetParent(baulRect.parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(14f, 14f);
+            go.GetComponent<Image>().color = new Color(1f, 0.88f, 0.35f, 1f);
+            go.GetComponent<Image>().raycastTarget = false;
+
+            Vector2 desde = new Vector2((MatX - 0.5f) * 1920f, (MatY - 0.5f) * 1080f);
+            Vector2 hasta  = baulRect.anchoredPosition;
+            float dur = 0.30f, t = 0f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k  = Mathf.Clamp01(t / dur);
+                float kE = EaseInOut(k);
+                Vector2 pos = Vector2.Lerp(desde, hasta, kE);
+                pos.y += Mathf.Sin(k * Mathf.PI) * 55f;
+                rt.anchoredPosition = pos;
+                rt.localScale = Vector3.one * Mathf.Lerp(1.2f, 0.5f, kE);
+                yield return null;
+            }
+            Destroy(go);
+
+            Flotante(baulRect, "+1", new Color(1f, 0.88f, 0.35f), 22, new Vector2(0f, 38f));
+            StartCoroutine(PulsarEscala(baulRect, 1.18f, 0.20f));
+        }
+
+        IEnumerator PulsarEscala(RectTransform rt, float pico, float dur)
+        {
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = t / dur;
+                rt.localScale = Vector3.one * (1f + (pico - 1f) * Mathf.Sin(k * Mathf.PI));
+                yield return null;
+            }
+            rt.localScale = Vector3.one;
         }
 
         int SlotLibreIndex()
