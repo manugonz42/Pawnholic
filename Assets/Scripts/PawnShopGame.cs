@@ -469,11 +469,29 @@ namespace PawnShop
 
         ItemDef SortearLote(LoteTier tier)
         {
+            float ojoRatio = tier.nivelOjoMax > 0
+                ? Mathf.Clamp01(data.nivelOjo / (float)tier.nivelOjoMax) : 0f;
+
             float total = 0f;
-            foreach (var e in tier.tabla) total += e.peso;
+            foreach (var e in tier.tabla) total += PesoConOjo(e, ojoRatio);
             float r = UnityEngine.Random.value * total;
-            foreach (var e in tier.tabla) { r -= e.peso; if (r <= 0f) return ResolverItem(e.nombre); }
+            foreach (var e in tier.tabla)
+            {
+                r -= PesoConOjo(e, ojoRatio);
+                if (r <= 0f) return ResolverItem(e.nombre);
+            }
             return ResolverItem(tier.tabla[tier.tabla.Length - 1].nombre);
+        }
+
+        // Modifica el peso de un item según el nivel de ojo:
+        // jackpots hasta ×4, bombas hasta ×0.3, el resto sin cambio.
+        float PesoConOjo(LoteEntrada e, float ojoRatio)
+        {
+            var item = ResolverItem(e.nombre);
+            if (item == null) return e.peso;
+            if (item.esJackpot) return e.peso * (1f + ojoRatio * 3f);
+            if (item.esBomba)   return e.peso * (1f - ojoRatio * 0.7f);
+            return e.peso;
         }
 
         void ComprarLote(LoteTier tier)
@@ -1608,8 +1626,9 @@ namespace PawnShop
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
-            ConstruirColumna(fila.transform, Rama.Manual, "MANUAL  (EXP)", fuente);
-            ConstruirColumna(fila.transform, Rama.Maquina, "MAQUINA  (dinero)", fuente);
+            ConstruirColumna(fila.transform, Rama.Manual,      "MANUAL  (EXP)",            fuente);
+            ConstruirColumna(fila.transform, Rama.Maquina,     "MAQUINA  (dinero)",        fuente);
+            ConstruirColumna(fila.transform, Rama.Minerales,   "GEODOS  (EXP)",            fuente);
             ConstruirColumna(fila.transform, Rama.CompraVenta, "COMPRA-VENTA  (proximamente)", fuente);
 
             var cerrar = CrearBoton(cont.transform, "CERRAR", fuente, out _, () => ventanaMejoras.SetActive(false));
