@@ -69,6 +69,7 @@ namespace PawnShop
         const float BrazoPivotX = 730f, BrazoPivotY = 130f; // pivot del brazo
         const float BrazoLargo = 150f;                // longitud del brazo en px
         const float BaulIntervaloBase = 20f;          // segundos entre items que llegan al baúl
+        const float RangoConexion = 200f;             // dist. max (canvas px) brazo↔componente para conectar
 
         // ----------------- Balance: GENERAL -----------------
         const float  IntervaloAutoguardado = 5f;
@@ -96,7 +97,11 @@ namespace PawnShop
         bool   BaulComprado      => data.nivelBaul  >= 1;
         bool   BrazoComprado     => data.nivelBrazo >= 1;
         bool   TolvaComprada     => data.nivelTolva >= 1;
-        bool   CadenaCompleta    => BaulComprado && BrazoComprado && TolvaComprada;
+        bool   BaulBrazoEnRango  => BaulComprado && BrazoComprado && baulRect != null && brazoHombro != null
+                                    && Vector2.Distance(baulRect.anchoredPosition, brazoHombro.anchoredPosition) < RangoConexion;
+        bool   BrazoTolvaEnRango => BrazoComprado && TolvaComprada && tolvaRect != null && brazoHombro != null
+                                    && Vector2.Distance(tolvaRect.anchoredPosition, brazoHombro.anchoredPosition) < RangoConexion;
+        bool   CadenaCompleta    => BaulComprado && BrazoComprado && TolvaComprada && BaulBrazoEnRango && BrazoTolvaEnRango;
         int    BaulCapacidad     => 2 + data.nivelBaul * 2;           // 1→4, 2→6, 3→8, 4→10
         float  BrazoCooldown     => Mathf.Max(2f, 12f - (data.nivelBrazo - 1) * 2f);
         float  BrazoVelGiro      => 160f + data.nivelBrazo * 30f;
@@ -145,6 +150,11 @@ namespace PawnShop
         RectTransform tolvaConectorRect;
         Text  baulTexto, tolvaLabel;
         GameObject brazoPiezaGO;
+        // Arrastre libre de componentes
+        RectTransform compEnArrastre;
+        Vector2 offsetArrastre;
+        // Puntos de conexión visuales
+        PuntoConexion pcBaulOut, pcBrazoIn, pcBrazoOut, pcTolvaIn;
 
         // ----------------- Clientes -----------------
         ClienteDef[] clientes;
@@ -197,6 +207,17 @@ namespace PawnShop
             public Text texto;
         }
 
+        class PuntoConexion
+        {
+            public RectTransform dueño;
+            public Vector2 offsetLocal;
+            public Image dot;
+            static readonly Color Libre     = new Color(0.45f, 0.48f, 0.55f, 0.9f);
+            static readonly Color Conectado = new Color(0.25f, 0.92f, 0.40f, 1.0f);
+            public void Refrescar(bool conectado)
+            { if (dot != null) dot.color = conectado ? Conectado : Libre; }
+        }
+
         float tiempoDesdeGuardado;
 
         void Awake()
@@ -214,6 +235,8 @@ namespace PawnShop
             if (BrazoComprado && brazoHombro   != null) brazoHombro.gameObject.SetActive(true);
             if (BrazoComprado && brazoBaseRect != null) brazoBaseRect.gameObject.SetActive(true);
             if (BrazoComprado && !brazoCoroutineActiva) StartCoroutine(CicloBrazo());
+            RecalcularAngulosBrazo();
+            ActualizarConectorTolva();
         }
 
         void PrepararAudio()
@@ -247,6 +270,7 @@ namespace PawnShop
             }
 
             ActualizarUI();
+            ActualizarIndicadoresConexion();
 
             tiempoDesdeGuardado += Time.deltaTime;
             if (tiempoDesdeGuardado >= IntervaloAutoguardado)
@@ -1777,7 +1801,9 @@ namespace PawnShop
             baulRect.sizeDelta = new Vector2(150, 120);
             baulRect.anchoredPosition = new Vector2(BaulX, BaulY);
             go.GetComponent<RawImage>().texture = PixelArtFactory.CrearBaul();
-            go.GetComponent<RawImage>().raycastTarget = false;
+            go.GetComponent<RawImage>().raycastTarget = true;
+            HacerArrastrable(baulRect);
+            pcBaulOut = CrearIndicador(go.transform, baulRect, new Vector2(-65f, 5f));
 
             baulTexto = CrearTexto(go.transform, "0/4", 18, fuente, new Color(0.9f, 0.8f, 0.5f));
             var lt = baulTexto.GetComponent<RectTransform>();
@@ -1810,7 +1836,9 @@ namespace PawnShop
             tolvaRect.sizeDelta = new Vector2(120, 100);
             tolvaRect.anchoredPosition = new Vector2(TolvaX, TolvaY);
             go.GetComponent<RawImage>().texture = PixelArtFactory.CrearTolva();
-            go.GetComponent<RawImage>().raycastTarget = false;
+            go.GetComponent<RawImage>().raycastTarget = true;
+            HacerArrastrable(tolvaRect);
+            pcTolvaIn = CrearIndicador(go.transform, tolvaRect, new Vector2(55f, 5f));
 
             // Label: ranuras que aporta la tolva
             tolvaLabel = CrearTexto(go.transform, "", 17, fuente, new Color(0.75f, 0.88f, 0.65f));
@@ -1838,7 +1866,10 @@ namespace PawnShop
             brazoBaseRect.sizeDelta = new Vector2(40, 40);
             brazoBaseRect.anchoredPosition = pivotPos;
             baseGO.GetComponent<Image>().color = new Color(0.18f, 0.20f, 0.24f, 1f);
-            baseGO.GetComponent<Image>().raycastTarget = false;
+            baseGO.GetComponent<Image>().raycastTarget = true;
+            HacerArrastrable(brazoBaseRect);
+            pcBrazoIn  = CrearIndicador(baseGO.transform, brazoBaseRect, new Vector2( 22f, 0f));
+            pcBrazoOut = CrearIndicador(baseGO.transform, brazoBaseRect, new Vector2(-22f, 0f));
 
             // Cuatro tornillos en las esquinas
             Vector2[] bolts = { new Vector2(-14f,14f), new Vector2(14f,14f), new Vector2(-14f,-14f), new Vector2(14f,-14f) };
@@ -2110,8 +2141,9 @@ namespace PawnShop
                 if (brazoPiezaGO != null) brazoPiezaGO.SetActive(false);
                 yield return new WaitForSeconds(0.15f);
 
-                // 5. Cooldown antes del siguiente ciclo
+                // 5. Cooldown y volver al baúl a esperar el siguiente item
                 yield return new WaitForSeconds(BrazoCooldown);
+                yield return StartCoroutine(RotarBrazo(angleBaulPivot));
             }
         }
 
@@ -2177,6 +2209,98 @@ namespace PawnShop
                 yield return null;
             }
             tr.localScale = Vector3.one;
+        }
+
+        // ================= ARRASTRE Y PUNTOS DE CONEXIÓN =================
+
+        void HacerArrastrable(RectTransform comp)
+        {
+            var et = comp.gameObject.AddComponent<EventTrigger>();
+            RegistrarTrigger(et, EventTriggerType.BeginDrag, d => IniciarArrastre(comp, (PointerEventData)d));
+            RegistrarTrigger(et, EventTriggerType.Drag,      d => DuranteArrastre((PointerEventData)d));
+            RegistrarTrigger(et, EventTriggerType.EndDrag,   d => FinArrastre((PointerEventData)d));
+        }
+
+        void RegistrarTrigger(EventTrigger et, EventTriggerType tipo, UnityAction<BaseEventData> cb)
+        {
+            var entry = new EventTrigger.Entry { eventID = tipo };
+            entry.callback.AddListener(cb);
+            et.triggers.Add(entry);
+        }
+
+        Vector2 ScreenToCanvas(Vector2 screenPos)
+        {
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPos, null, out var p);
+            return p;
+        }
+
+        void IniciarArrastre(RectTransform comp, PointerEventData e)
+        {
+            compEnArrastre = comp;
+            offsetArrastre = comp.anchoredPosition - ScreenToCanvas(e.position);
+        }
+
+        void DuranteArrastre(PointerEventData e)
+        {
+            if (compEnArrastre == null) return;
+            Vector2 novaPos = ScreenToCanvas(e.position) + offsetArrastre;
+            compEnArrastre.anchoredPosition = novaPos;
+            // Brazo: mover también el pivote rotante (misma posición que la base)
+            if (compEnArrastre == brazoBaseRect && brazoHombro != null)
+                brazoHombro.anchoredPosition = novaPos;
+            RecalcularAngulosBrazo();
+            if (compEnArrastre == tolvaRect) ActualizarConectorTolva();
+        }
+
+        void FinArrastre(PointerEventData e)
+        {
+            if (compEnArrastre == null) return;
+            RecalcularAngulosBrazo();
+            if (compEnArrastre == tolvaRect) ActualizarConectorTolva();
+            compEnArrastre = null;
+        }
+
+        void RecalcularAngulosBrazo()
+        {
+            if (brazoHombro == null) return;
+            Vector2 pivot = brazoHombro.anchoredPosition;
+            if (baulRect  != null && BaulComprado)  angleBaulPivot  = AnguloHacia(baulRect.anchoredPosition  - pivot);
+            if (tolvaRect != null && TolvaComprada) angleTolvaPivot = AnguloHacia(tolvaRect.anchoredPosition - pivot);
+        }
+
+        void ActualizarIndicadoresConexion()
+        {
+            if (!BrazoComprado) return;
+            bool bb = BaulBrazoEnRango;
+            bool bt = BrazoTolvaEnRango;
+            pcBaulOut?.Refrescar(bb);
+            pcBrazoIn?.Refrescar(bb);
+            pcBrazoOut?.Refrescar(bt);
+            pcTolvaIn?.Refrescar(bt);
+        }
+
+        void ActualizarConectorTolva()
+        {
+            if (tolvaConectorRect == null || tolvaRect == null || machineRect == null) return;
+            float bottom = tolvaRect.anchoredPosition.y - 50f;
+            float top    = machineRect.anchoredPosition.y + 140f;
+            float h      = Mathf.Max(2f, bottom - top);
+            tolvaConectorRect.anchoredPosition = new Vector2(tolvaRect.anchoredPosition.x, top + h * 0.5f);
+            tolvaConectorRect.sizeDelta = new Vector2(10f, h + 4f);
+        }
+
+        PuntoConexion CrearIndicador(Transform parent, RectTransform dueño, Vector2 offset)
+        {
+            var go = new GameObject("PC", typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(14, 14);
+            rt.anchoredPosition = offset;
+            var img = go.GetComponent<Image>();
+            img.color = new Color(0.45f, 0.48f, 0.55f, 0.9f);
+            img.raycastTarget = false;
+            return new PuntoConexion { dueño = dueño, offsetLocal = offset, dot = img };
         }
     }
 }
