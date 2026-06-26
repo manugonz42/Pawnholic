@@ -2,9 +2,9 @@
 
 > An incremental pawnshop game with dark humor
 
-![Unity](https://img.shields.io/badge/Unity-2022-000000?style=for-the-badge&logo=unity)
-![C#](https://img.shields.io/badge/C%23-10-239120?style=for-the-badge&logo=csharp)
-![Indie Game](https://img.shields.io/badge/Indie%20Game-Purple?style=for-the-badge)
+![Unity](https://img.shields.io/badge/Unity-2022-c0caf5?style=for-the-badge&logo=unity&labelColor=1a1b26)
+![C#](https://img.shields.io/badge/C%23-10-9ece6a?style=for-the-badge&logo=csharp&labelColor=1a1b26)
+![Indie Game](https://img.shields.io/badge/Indie%20Game-bb9af7?style=for-the-badge&labelColor=1a1b26)
 
 ---
 
